@@ -42,4 +42,5 @@ def get_read_only_db():
     try:
         yield db
     finally:
+        db.execute(text("PRAGMA query_only = OFF;"))
         db.close()
