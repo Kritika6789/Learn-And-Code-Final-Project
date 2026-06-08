@@ -16,9 +16,11 @@ app.include_router(employee.router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    msg = ", ".join([f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in errors])
     return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={"detail": "Incorrect username or password", "body": exc.errors()},
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": f"Validation Error: {msg}"},
     )
 
 @app.on_event("startup")
