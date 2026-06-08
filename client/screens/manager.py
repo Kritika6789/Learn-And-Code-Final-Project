@@ -81,9 +81,16 @@ def resource_dashboard():
                     
                     print("\nActive Allocations:")
                     if emp.get('allocations'):
-                        headers = ["Project", "%", "From", "To"]
-                        rows = [[a['project'], f"{a['percentage']}%", a['from'], a['to']] for a in emp['allocations']]
-                        ui.print_table(headers, rows, [16, 6, 12, 12])
+                        print("  Project          %     From         To")
+                        for a in emp['allocations']:
+                            from datetime import datetime
+                            try:
+                                f_date = datetime.strptime(str(a['from']), '%Y-%m-%d').strftime('%d-%b-%y')
+                                t_date = datetime.strptime(str(a['to']), '%Y-%m-%d').strftime('%d-%b-%y')
+                            except:
+                                f_date = str(a['from'])
+                                t_date = str(a['to'])
+                            print(f"  {a['project']:<15}  {a['percentage']}%    {f_date:<11}  {t_date}")
                     else:
                         print("  None")
                         
@@ -326,9 +333,16 @@ def show_project_detail(project_id):
 
         print("\nAllocated Resources:")
         if details.get("allocations"):
-            headers = ["Name", "%", "From", "To"]
-            rows = [[a["employee"], f"{a['percentage']}%", a["from"], a["to"]] for a in details["allocations"]]
-            ui.print_table(headers, rows, [18, 6, 12, 12])
+            print("  Name           %      From         To")
+            for a in details["allocations"]:
+                from datetime import datetime
+                try:
+                    f_date = datetime.strptime(str(a['from']), '%Y-%m-%d').strftime('%d-%b-%y')
+                    t_date = datetime.strptime(str(a['to']), '%Y-%m-%d').strftime('%d-%b-%y')
+                except:
+                    f_date = str(a['from'])
+                    t_date = str(a['to'])
+                print(f"  {a['employee']:<13}  {a['percentage']}%    {f_date:<11}  {t_date}")
         else:
             print("  (No allocations)")
 
