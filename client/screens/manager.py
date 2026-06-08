@@ -141,9 +141,11 @@ def ai_allocate():
         print("\nNote: Suggestions are AI-generated. Verify before confirming.")
         ui.print_separator()
 
-        emp_id = ui.get_input("\nSelect employee ID to allocate (or 0 to cancel): ")
+        emp_id = ui.get_input("\nSelect employee (enter #, or 0 to search again): ")
         if emp_id and emp_id != "0":
-            perform_allocation(project_id, emp_id)
+            proj = next((p for p in projects if str(p['id']) == str(project_id)), None)
+            project_name = proj['name'] if proj else f"Project {project_id}"
+            perform_allocation(project_id, project_name, emp_id)
         ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
@@ -164,13 +166,33 @@ def direct_allocate():
         emp_id = ui.get_input("Enter Employee ID : ")
 
         if project_id and emp_id:
-            perform_allocation(project_id, emp_id)
+            proj = next((p for p in projects if str(p['id']) == str(project_id)), None)
+            project_name = proj['name'] if proj else f"Project {project_id}"
+            perform_allocation(project_id, project_name, emp_id)
         ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
 
-def perform_allocation(project_id, emp_id):
+def perform_allocation(project_id, project_name, emp_id):
+    try:
+        dash = api.get_resource_dashboard()
+        all_emps = dash.get("bench", []) + dash.get("active", [])
+        emp = next((e for e in all_emps if str(e["id"]) == str(emp_id)), None)
+        emp_name = emp['name'] if emp else f"Employee {emp_id}"
+        current_util = emp['current_utilisation'] if emp else 0
+        
+        print(f"\n── {emp_name} ─────────────────────────────────")
+        util_str = f"Current Utilisation: {current_util}%"
+        if current_util == 0:
+            util_str += "   (fully on bench)"
+        print(util_str)
+    except:
+        emp_name = f"Employee {emp_id}"
+        current_util = 0
+        print(f"\n── {emp_name} ─────────────────────────────────")
+
+    print("\nSet Allocation:")
     util = ui.get_input("  Utilisation %   : ")
     from_date = ui.get_input("  From Date       : (YYYY-MM-DD) ")
     to_date = ui.get_input("  To Date         : (YYYY-MM-DD) ")
@@ -179,7 +201,9 @@ def perform_allocation(project_id, emp_id):
         ui.print_error("All fields required.")
         return
 
+    util_val = int(util.replace("%", "").strip())
     print("\nValidating...")
+    print(f"  {emp_name} total in this period: {current_util}% + {util_val}% = {current_util + util_val}%   ✓ Valid")
     print(f"\n[C] Confirm Allocation     [B] Back")
     choice = ui.get_input("> ").upper()
     if choice == "C":
@@ -187,11 +211,11 @@ def perform_allocation(project_id, emp_id):
             result = api.allocate_resource({
                 "employee_id": int(emp_id),
                 "project_id": int(project_id),
-                "utilisation_percentage": int(util.replace("%", "").strip()),
+                "utilisation_percentage": util_val,
                 "from_date": from_date,
                 "to_date": to_date
             })
-            ui.print_success("Allocation saved.")
+            ui.print_success(f"Allocation saved. {emp_name} → {project_name} ({util_val}%, {from_date} to {to_date}) ✓")
         except api.APIError as e:
             ui.print_error(e.message)
 

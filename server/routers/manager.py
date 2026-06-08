@@ -180,8 +180,11 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     Here are the available candidates:
     {candidates_text}
     
-    Rank the top matches and provide a brief, plain-English reason for each based on their skills and availability.
-    Format your response nicely.
+    Rank the top matches based on their skills and availability.
+    You MUST output a simple text table with exactly these headers:
+    #   Name           Skills Match           Availability   Recent Activity
+    
+    For each candidate, output a row matching the format. Do not add any other text before or after the table.
     """
     
     if api_key and len(api_key) > 5:
