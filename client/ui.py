@@ -71,7 +71,6 @@ def print_table(headers, rows, col_widths=None):
     for i, h in enumerate(headers):
         header_line += str(h).ljust(col_widths[i])
     print(header_line)
-    print_separator()
 
     for row in rows:
         line = ""
