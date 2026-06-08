@@ -124,11 +124,61 @@ def end_allocation(alloc_id: int, db: Session = Depends(get_db), current_user: m
     db.commit()
     return {"message": "Allocation ended today"}
 
+@router.get("/dashboard/{emp_id}")
+def employee_drill_down(emp_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_manager(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == emp_id, models.Employee.manager_id == current_user.id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found or not in your team")
+        
+    today = date.today()
+    active_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+    total_util = sum(a.utilisation_percentage for a in active_allocs)
+    
+    recent_timesheets = db.query(models.Timesheet).filter(models.Timesheet.employee_id == emp.id).order_by(models.Timesheet.week_start_date.desc()).limit(4).all()
+    
+    tags = set()
+    for t in recent_timesheets:
+        if t.activity_tags:
+            for tag in t.activity_tags.split(","):
+                tags.add(tag.strip())
+                
+    return {
+        "id": emp.id,
+        "name": emp.full_name,
+        "department": emp.department,
+        "current_utilisation": total_util,
+        "status": "BENCH" if total_util == 0 else f"ALLOCATED ({total_util}%)",
+        "skills": [s.name for s in emp.skills],
+        "allocations": [{"project": a.project.name, "percentage": a.utilisation_percentage, "from": a.from_date, "to": a.to_date} for a in active_allocs],
+        "recent_tags": list(tags) if tags else ["None"]
+    }
+
 # --- Projects ---
 @router.get("/projects", response_model=List[schemas.ProjectResponse])
 def my_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_manager(current_user)
-    return db.query(models.Project).filter(models.Project.manager_id == current_user.id).all()
+    projects = db.query(models.Project).filter(models.Project.manager_id == current_user.id).all()
+    res = []
+    for p in projects:
+        health = "🟢 ON TRACK"
+        today = date.today()
+        for m in p.milestones:
+            if m.status != "DONE" and m.due_date < today:
+                health = "🔴 AT RISK"
+                break
+        if health == "🟢 ON TRACK" and p.end_date < today and p.status != "COMPLETED":
+             health = "🟡 ATTENTION"
+        
+        # Add basic project info plus health
+        res.append({
+            "id": p.id,
+            "name": p.name,
+            "status": p.status,
+            "end_date": p.end_date,
+            "health": health
+        })
+    return res
 
 @router.get("/projects/{project_id}")
 def project_details(project_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -137,11 +187,32 @@ def project_details(project_id: int, db: Session = Depends(get_db), current_user
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
         
+    health = "🟢 ON TRACK"
+    risk_flags = []
+    today = date.today()
+    for m in proj.milestones:
+        if m.status != "DONE" and m.due_date < today:
+            health = "🔴 AT RISK"
+            risk_flags.append(f"✗ {m.title} milestone is overdue")
+            
+    if not proj.allocations:
+        risk_flags.append("✗ No resources allocated")
+    else:
+        risk_flags.append("✓ Resources are allocated")
+        
+    if not risk_flags:
+         risk_flags.append("✓ All milestones on track")
+         
+    if health == "🟢 ON TRACK" and proj.end_date < today and proj.status != "COMPLETED":
+        health = "🟡 ATTENTION"
+
     return {
         "id": proj.id,
         "name": proj.name,
         "status": proj.status,
         "end_date": proj.end_date,
+        "health": health,
+        "risk_flags": risk_flags,
         "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status} for m in proj.milestones],
         "allocations": [{"id": a.id, "employee": a.employee.full_name, "percentage": a.utilisation_percentage, "from": a.from_date, "to": a.to_date} for a in proj.allocations]
     }
@@ -247,4 +318,25 @@ def view_team_timesheets(week: Optional[date] = None, db: Session = Depends(get_
         query = query.filter(models.Timesheet.week_start_date == week)
         
     timesheets = query.all()
-    return [{"employee": t.employee.full_name, "project": t.project.name, "hours": t.hours_logged, "status": t.status, "week": t.week_start_date} for t in timesheets]
+    res = [{"employee": t.employee.full_name, "project": t.project.name, "hours": t.hours_logged, "status": t.status, "week": t.week_start_date} for t in timesheets]
+    
+    if week:
+        # Compute missed timesheets for the specific week
+        submitted = {(t.employee_id, t.project_id) for t in timesheets}
+        allocations = db.query(models.Allocation).filter(
+            models.Allocation.project_id.in_(project_ids),
+            models.Allocation.from_date <= week,
+            models.Allocation.to_date >= week
+        ).all()
+        
+        for a in allocations:
+            if (a.employee_id, a.project_id) not in submitted:
+                res.append({
+                    "employee": a.employee.full_name,
+                    "project": a.project.name,
+                    "hours": 0,
+                    "status": "MISSED ⚠",
+                    "week": week
+                })
+                
+    return res

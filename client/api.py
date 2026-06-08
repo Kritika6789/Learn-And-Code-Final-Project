@@ -53,12 +53,13 @@ def get_config(): return handle_response(requests.get(f"{BASE_URL}/admin/config"
 
 # --- Manager API ---
 def get_dashboard(): return handle_response(requests.get(f"{BASE_URL}/manager/dashboard", headers=get_headers()))
+def get_dashboard_employee(emp_id): return handle_response(requests.get(f"{BASE_URL}/manager/dashboard/{emp_id}", headers=get_headers()))
 def get_my_projects(): return handle_response(requests.get(f"{BASE_URL}/manager/projects", headers=get_headers()))
 def get_project_details(pid): return handle_response(requests.get(f"{BASE_URL}/manager/projects/{pid}", headers=get_headers()))
 def ai_search(pid, req): return handle_response(requests.post(f"{BASE_URL}/manager/ai/search", json={"project_id": pid, "requirement": req}, headers=get_headers()))
 def ai_risk(pid): return handle_response(requests.get(f"{BASE_URL}/manager/ai/risk-summary/{pid}", headers=get_headers()))
 def allocate_resource(data): return handle_response(requests.post(f"{BASE_URL}/manager/allocations", json=data, headers=get_headers()))
-def get_team_timesheets(): return handle_response(requests.get(f"{BASE_URL}/manager/timesheets", headers=get_headers()))
+def get_team_timesheets(week=None): return handle_response(requests.get(f"{BASE_URL}/manager/timesheets", params={"week": week} if week else None, headers=get_headers()))
 
 # --- Employee API ---
 def submit_timesheet(data): return handle_response(requests.post(f"{BASE_URL}/employee/timesheets", json=data, headers=get_headers()))

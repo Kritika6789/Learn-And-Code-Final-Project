@@ -72,17 +72,27 @@ def resource_dashboard():
         if choice == "D":
             emp_id = ui.get_input("Enter Employee ID: ")
             if emp_id:
-                all_emp = bench + active
-                emp = next((e for e in all_emp if str(e["id"]) == emp_id), None)
-                if emp:
+                try:
+                    emp = api.get_dashboard_employee(emp_id)
                     print(f"\n── {emp['name']} ─────────────────────────────────")
                     print(f"Department     : {emp['department']}")
-                    status_text = 'BENCH' if emp['current_utilisation'] == 0 else f"ALLOCATED ({emp['current_utilisation']}%)"
-                    print(f"Current Status : {status_text}")
+                    print(f"Current Status : {emp['status']}")
                     print(f"Profile Skills : {', '.join(emp.get('skills', []))}")
+                    
+                    print("\nActive Allocations:")
+                    if emp.get('allocations'):
+                        headers = ["Project", "%", "From", "To"]
+                        rows = [[a['project'], f"{a['percentage']}%", a['from'], a['to']] for a in emp['allocations']]
+                        ui.print_table(headers, rows, [16, 6, 12, 12])
+                    else:
+                        print("  None")
+                        
+                    print("\nRecent Activity Tags (last 4 weeks):")
+                    print(f"  {', '.join(emp.get('recent_tags', []))}")
+                    
                     ui.get_input("\n[B] Back > ")
-                else:
-                    ui.print_error("Employee not found in dashboard")
+                except api.APIError as e:
+                    ui.print_error(e.message)
                     ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
@@ -235,6 +245,7 @@ def end_allocation():
             return
 
         details = api.get_project_details(int(project_id))
+        proj_name = details.get("name", f"Project {project_id}")
         allocs = details.get("allocations", [])
 
         if not allocs:
@@ -250,15 +261,18 @@ def end_allocation():
         sel = ui.get_input("\nSelect allocation to end (#): ")
         if sel and sel.isdigit() and 1 <= int(sel) <= len(allocs):
             alloc = allocs[int(sel) - 1]
-            print(f"\nEnd {alloc['employee']}'s allocation?")
-            print("[Y] Yes, End Now    [B] Back")
+            print(f"\nEnd {alloc['employee']}'s allocation on {proj_name}?")
+            from datetime import datetime
+            today_str = datetime.now().strftime("%d-%b-%Y")
+            print(f"Set end date to today ({today_str})?")
+            print("\n[Y] Yes, End Now    [B] Back")
             choice = ui.get_input("> ").upper()
             if choice == "Y":
                 import requests as req
                 api.handle_response(
                     req.put(f"{api.BASE_URL}/manager/allocations/{alloc['id']}/end", headers=api.get_headers())
                 )
-                ui.print_success(f"Allocation ended.")
+                ui.print_success(f"Allocation ended. {alloc['employee']} freed from {proj_name} as of {today_str}.")
         ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
@@ -275,9 +289,9 @@ def my_projects():
             ui.get_input("\n[B] Back > ")
             return
 
-        headers = ["#", "Project", "End Date", "Status"]
-        rows = [[i+1, p["name"], p["end_date"], p["status"]] for i, p in enumerate(projects)]
-        ui.print_table(headers, rows, [5, 18, 12, 12])
+        headers = ["#", "Project", "End Date", "Health"]
+        rows = [[i+1, p["name"], p["end_date"], p.get("health", p["status"])] for i, p in enumerate(projects)]
+        ui.print_table(headers, rows, [5, 18, 12, 16])
 
         sel = ui.get_input("\nSelect project number to view details (or B to go back): ")
         if sel and sel.isdigit() and 1 <= int(sel) <= len(projects):
@@ -292,7 +306,15 @@ def show_project_detail(project_id):
     try:
         details = api.get_project_details(project_id)
         print(f"── {details['name']} ───────────────────────────────")
-        print(f"Status : {details['status']}")
+        print(f"Health Status : {details.get('health', details['status'])}")
+
+        print("\nRisk Flags:")
+        flags = details.get("risk_flags", [])
+        if flags:
+            for r in flags:
+                print(f"  {r}")
+        else:
+            print("  ✓ No specific risk flags found.")
 
         print("\nMilestones:")
         if details.get("milestones"):
@@ -329,21 +351,31 @@ def view_timesheets():
     ui.clear_screen()
     ui.print_header("TIMESHEETS — MY TEAM")
     try:
-        print("Filter by week (YYYY-MM-DD) or press Enter for all:")
+        print("Filter by week (YYYY-MM-DD) or press Enter for current week:")
         week = ui.get_input("Week: ")
+        
+        if not week:
+            from datetime import date, timedelta
+            today = date.today()
+            week = (today - timedelta(days=today.weekday())).isoformat()
+            print(week)
 
-        timesheets = api.get_team_timesheets()
+        timesheets = api.get_team_timesheets(week)
 
         if not timesheets:
-            print("No timesheets found for your team.")
-        else:
-            ui.print_separator()
-            headers = ["Employee", "Project", "Hrs", "Status"]
-            rows = [[t["employee"], t["project"], t["hours"], t["status"]] for t in timesheets]
-            ui.print_table(headers, rows, [18, 18, 6, 12])
+            print("No timesheets found.")
+            ui.get_input("Press Enter to continue...")
+            return
 
+        ui.print_separator()
+        headers = ["Employee", "Project", "Hrs", "Status"]
+        rows = [[t["employee"], t["project"], t["hours"], t["status"]] for t in timesheets]
+        ui.print_table(headers, rows, [18, 18, 6, 16])
+        ui.print_separator()
+        
         print("\n[V] View employee timesheet detail     [B] Back")
-        ui.get_input("> ")
+        choice = ui.get_input("> ").upper()
+        # [V] is a placeholder for now, just like [B] it goes back since there's no deeper timesheet detail view in the mockup.
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
@@ -412,7 +444,7 @@ def risk_summary():
 
         print("Select project:")
         for i, p in enumerate(projects, 1):
-            print(f"  {i}.  {p['name']}    {p['status']}")
+            print(f"  {i}.  {p['name']}    {p.get('health', p['status'])}")
 
         sel = ui.get_input("\nEnter project number: ")
         if sel and sel.isdigit() and 1 <= int(sel) <= len(projects):
