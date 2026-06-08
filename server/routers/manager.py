@@ -172,7 +172,7 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                'gemini-pro'
+                'gemini-2.5-flash'
             )
             response = model.generate_content(prompt)
             return {"results": response.text}
@@ -208,7 +208,7 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                'gemini-pro'
+                'gemini-2.5-flash'
             )
             response = model.generate_content(prompt)
             return {"summary": response.text}
