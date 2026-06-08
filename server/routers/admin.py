@@ -202,6 +202,20 @@ def get_projects(db: Session = Depends(get_db), current_user: models.User = Depe
     check_admin(current_user)
     return db.query(models.Project).all()
 
+@router.get("/projects/{project_id}")
+def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {
+        "id": proj.id,
+        "name": proj.name,
+        "status": proj.status,
+        "end_date": proj.end_date,
+        "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status} for m in proj.milestones]
+    }
+
 @router.post("/projects/{project_id}/milestones", response_model=schemas.MilestoneResponse)
 def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)

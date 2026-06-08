@@ -370,7 +370,7 @@ def manage_milestones():
                 return
 
             milestones = api.handle_response(
-                __import__('requests').get(f"{api.BASE_URL}/manager/projects/{project_id}", headers=api.get_headers())
+                __import__('requests').get(f"{api.BASE_URL}/admin/projects/{project_id}", headers=api.get_headers())
             ).get("milestones", [])
 
             ui.clear_screen()
