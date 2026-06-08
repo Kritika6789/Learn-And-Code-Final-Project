@@ -5,9 +5,9 @@ from typing import List, Optional
 from datetime import date
 from pydantic import BaseModel
 
-import models, schemas, auth
-from database import get_db
-from dependencies import get_current_active_user, get_read_only_db
+from server import models, schemas, auth
+from server.database import get_db
+from server.dependencies import get_current_active_user, get_read_only_db
 import google.generativeai as genai
 
 router = APIRouter(

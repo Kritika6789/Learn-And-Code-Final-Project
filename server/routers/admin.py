@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
 
-import models, schemas, auth
-from database import get_db
-from dependencies import get_current_active_user
+from server import models, schemas, auth
+from server.database import get_db
+from server.dependencies import get_current_active_user
 
 router = APIRouter(
     prefix="/api/admin",
