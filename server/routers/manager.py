@@ -121,6 +121,13 @@ def end_allocation(alloc_id: int, db: Session = Depends(get_db), current_user: m
         raise HTTPException(status_code=403, detail="Not authorized to modify this project's allocations")
         
     alloc.to_date = date.today()
+    
+    emp = alloc.employee
+    today = date.today()
+    other_active = [a for a in emp.allocations if a.id != alloc.id and a.to_date > today]
+    if not other_active:
+        emp.status = "BENCH"
+        
     db.commit()
     return {"message": "Allocation ended today"}
 

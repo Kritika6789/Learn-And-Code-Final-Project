@@ -288,7 +288,8 @@ def end_allocation():
                     req.put(f"{api.BASE_URL}/manager/allocations/{alloc['id']}/end", headers=api.get_headers())
                 )
                 ui.print_success(f"Allocation ended. {alloc['employee']} freed from {proj_name} as of {today_str}.")
-        ui.get_input("Press Enter to continue...")
+                print("Employee status updated to BENCH if no other active allocations remain.")
+        ui.get_input("\nPress Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
