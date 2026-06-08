@@ -42,7 +42,7 @@ def get_dashboard(db: Session = Depends(get_db), current_user: models.User = Dep
     
     for emp in employees:
         today = date.today()
-        current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+        current_allocs = [a for a in emp.allocations if a.from_date <= today < a.to_date]
         total_util = sum(a.utilisation_percentage for a in current_allocs)
         
         emp_data = {
@@ -139,7 +139,7 @@ def employee_drill_down(emp_id: int, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail="Employee not found or not in your team")
         
     today = date.today()
-    active_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+    active_allocs = [a for a in emp.allocations if a.from_date <= today < a.to_date]
     total_util = sum(a.utilisation_percentage for a in active_allocs)
     
     recent_timesheets = db.query(models.Timesheet).filter(models.Timesheet.employee_id == emp.id).order_by(models.Timesheet.week_start_date.desc()).limit(4).all()
@@ -239,7 +239,7 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     
     today = date.today()
     for emp in employees:
-        current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+        current_allocs = [a for a in emp.allocations if a.from_date <= today < a.to_date]
         total_util = sum(a.utilisation_percentage for a in current_allocs)
         free_capacity = 100 - total_util
         if free_capacity > 0:
