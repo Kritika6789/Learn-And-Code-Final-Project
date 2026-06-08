@@ -187,7 +187,7 @@ def perform_allocation(project_id, emp_id):
             result = api.allocate_resource({
                 "employee_id": int(emp_id),
                 "project_id": int(project_id),
-                "utilisation_percentage": int(util),
+                "utilisation_percentage": int(util.replace("%", "").strip()),
                 "from_date": from_date,
                 "to_date": to_date
             })
