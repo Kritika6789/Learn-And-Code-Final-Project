@@ -145,6 +145,20 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
     db.commit()
     return {"message": "Employee deactivated and active allocations ended"}
 
+@router.put("/employees/{emp_id}/manager")
+def assign_manager(emp_id: int, manager_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    manager = db.query(models.User).filter(models.User.id == manager_id, models.User.role == "MANAGER").first()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found or invalid role")
+    
+    emp.manager_id = manager.id
+    db.commit()
+    return {"message": f"Manager assigned to employee {emp.full_name}"}
+
 # --- Skills Management ---
 @router.post("/employees/{emp_id}/skills", response_model=schemas.SkillResponse)
 def add_skill(emp_id: int, skill: schemas.SkillCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):

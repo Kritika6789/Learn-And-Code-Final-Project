@@ -38,28 +38,49 @@ def manage_employees():
         ui.clear_screen()
         ui.print_header("MANAGE EMPLOYEES")
         choice = ui.get_menu_choice([
-            "Add Employee",
             "View All Employees",
             "Update Employee",
             "Deactivate Employee",
             "Manage Employee Skills",
+            "Assign Manager",
             "Back"
         ])
 
         if choice == "1":
-            add_employee()
-        elif choice == "2":
             view_all_employees()
-        elif choice == "3":
+        elif choice == "2":
             update_employee()
-        elif choice == "4":
+        elif choice == "3":
             deactivate_employee()
-        elif choice == "5":
+        elif choice == "4":
             manage_skills()
+        elif choice == "5":
+            assign_manager()
         elif choice == "6":
             return
         else:
             ui.print_error("Invalid option")
+            ui.get_input("Press Enter to continue...")
+
+def assign_manager():
+    ui.clear_screen()
+    ui.print_header("ASSIGN MANAGER")
+
+    emp_id = ui.get_input("Employee User ID : ")
+    if not emp_id:
+        return
+    manager_id = ui.get_input("Manager User ID  : ")
+    
+    print("\n" + "─"*46)
+    print("[S] Save     [B] Back")
+    choice = ui.get_input("> ").upper()
+    if choice == "S":
+        try:
+            res = api.assign_manager(emp_id, manager_id)
+            ui.print_success(res.get("message", "Manager assigned successfully."))
+            ui.get_input("Press Enter to continue...")
+        except api.APIError as e:
+            ui.print_error(e.message)
             ui.get_input("Press Enter to continue...")
 
 def add_employee():

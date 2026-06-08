@@ -46,6 +46,7 @@ def get_me():
 def get_users(): return handle_response(requests.get(f"{BASE_URL}/admin/users", headers=get_headers()))
 def create_user(data): return handle_response(requests.post(f"{BASE_URL}/admin/users", json=data, headers=get_headers()))
 def get_employees(): return handle_response(requests.get(f"{BASE_URL}/admin/employees", headers=get_headers()))
+def assign_manager(emp_id, manager_id): return handle_response(requests.put(f"{BASE_URL}/admin/employees/{emp_id}/manager", params={"manager_id": manager_id}, headers=get_headers()))
 def create_employee(data): return handle_response(requests.post(f"{BASE_URL}/admin/employees", json=data, headers=get_headers()))
 def get_projects(): return handle_response(requests.get(f"{BASE_URL}/admin/projects", headers=get_headers()))
 def get_config(): return handle_response(requests.get(f"{BASE_URL}/admin/config", headers=get_headers()))
