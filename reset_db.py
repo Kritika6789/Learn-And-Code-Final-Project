@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database import Base, SQLALCHEMY_DATABASE_URL
+from server.database import Base, SQLALCHEMY_DATABASE_URL
 
 # Drop all tables and recreate them from the current models
 

@@ -1,6 +1,6 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from database import SessionLocal
-import models
+from server.database import SessionLocal
+from server import models
 from datetime import date
 import logging
 

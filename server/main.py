@@ -4,10 +4,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-import models, schemas, auth, scheduler
-from database import engine, get_db
-from dependencies import get_current_active_user
-from routers import admin, manager, employee
+from server import models, schemas, auth, scheduler
+from server.database import engine, get_db
+from server.dependencies import get_current_active_user
+from server.routers import admin, manager, employee
 
 app = FastAPI(title="PRM Tool API")
 app.include_router(admin.router)
