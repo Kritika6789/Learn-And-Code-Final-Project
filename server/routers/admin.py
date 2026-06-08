@@ -148,7 +148,7 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
 @router.put("/employees/{emp_id}/manager")
 def assign_manager(emp_id: int, manager_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
-    emp = db.query(models.Employee).filter(models.Employee.id == emp_id).first()
+    emp = db.query(models.Employee).filter(models.Employee.user_id == emp_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
     manager = db.query(models.User).filter(models.User.id == manager_id, models.User.role == "MANAGER").first()
