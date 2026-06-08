@@ -21,7 +21,7 @@ def seed_admin():
             role="ADMIN",
             password_hash=get_password_hash("Admin@123"),
             is_active=True,
-            force_password_change=False,
+            force_password_change=True,
         )
         db.add(admin_user)
         db.commit()
