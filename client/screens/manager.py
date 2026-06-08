@@ -261,9 +261,17 @@ def end_allocation():
             return
 
         print(f"\nActive Allocations on this project:")
-        headers = ["#", "Employee", "%", "From", "To"]
-        rows = [[i+1, a["employee"], f"{a['percentage']}%", a["from"], a["to"]] for i, a in enumerate(allocs)]
-        ui.print_table(headers, rows, [4, 18, 6, 12, 12])
+        print("  #   Employee        %     From         To")
+        for i, a in enumerate(allocs):
+            from datetime import datetime
+            try:
+                f_date = datetime.strptime(str(a['from']), '%Y-%m-%d').strftime('%d-%b-%y')
+                t_date = datetime.strptime(str(a['to']), '%Y-%m-%d').strftime('%d-%b-%y')
+            except:
+                f_date = str(a['from'])
+                t_date = str(a['to'])
+            print(f"  {i+1}.  {a['employee']:<13}  {a['percentage']}%    {f_date:<11}  {t_date}")
+        ui.print_separator()
 
         sel = ui.get_input("\nSelect allocation to end (#): ")
         if sel and sel.isdigit() and 1 <= int(sel) <= len(allocs):
