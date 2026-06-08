@@ -172,8 +172,7 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                'gemini-1.5-flash',
-                system_instruction="You are a read-only Project Management AI Assistant. Your role is strictly to analyze data and provide insights. You do not have permission to modify, delete, or create data."
+                'gemini-pro'
             )
             response = model.generate_content(prompt)
             return {"results": response.text}
@@ -209,8 +208,7 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
         try:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                'gemini-1.5-flash',
-                system_instruction="You are a read-only Project Management AI Assistant. Your role is strictly to analyze data and provide insights. You do not have permission to modify, delete, or create data."
+                'gemini-pro'
             )
             response = model.generate_content(prompt)
             return {"summary": response.text}
