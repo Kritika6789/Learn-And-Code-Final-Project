@@ -155,7 +155,7 @@ def employee_drill_down(emp_id: int, db: Session = Depends(get_db), current_user
     }
 
 # --- Projects ---
-@router.get("/projects", response_model=List[schemas.ProjectResponse])
+@router.get("/projects")
 def my_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_manager(current_user)
     projects = db.query(models.Project).filter(models.Project.manager_id == current_user.id).all()
