@@ -227,8 +227,10 @@ def update_config(key: str, value: str, db: Session = Depends(get_db), current_u
     check_admin(current_user)
     conf = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == key).first()
     if not conf:
-        raise HTTPException(status_code=404, detail="Configuration key not found")
-    conf.value = value
+        conf = models.SystemConfiguration(key=key, value=value)
+        db.add(conf)
+    else:
+        conf.value = value
     db.commit()
     return {"message": f"Updated {key}"}
 
