@@ -214,7 +214,7 @@ def project_details(project_id: int, db: Session = Depends(get_db), current_user
         "health": health,
         "risk_flags": risk_flags,
         "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status} for m in proj.milestones],
-        "allocations": [{"id": a.id, "employee": a.employee.full_name, "percentage": a.utilisation_percentage, "from": a.from_date, "to": a.to_date} for a in proj.allocations]
+        "allocations": [{"id": a.id, "employee": a.employee.full_name, "percentage": a.utilisation_percentage, "from": a.from_date, "to": a.to_date} for a in proj.allocations if a.to_date >= today]
     }
 
 # --- AI ---
