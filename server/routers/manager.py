@@ -36,7 +36,7 @@ class AISearchReq(BaseModel):
 def get_dashboard(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_manager(current_user)
     
-    employees = db.query(models.Employee).all()
+    employees = db.query(models.Employee).filter(models.Employee.manager_id == current_user.id).all()
     bench = []
     active = []
     

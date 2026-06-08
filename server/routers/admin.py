@@ -39,6 +39,19 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    # Auto-create Employee profile for EMPLOYEE or MANAGER roles
+    if new_user.role in ["EMPLOYEE", "MANAGER"]:
+        emp = models.Employee(
+            user_id=new_user.id,
+            full_name=new_user.full_name,
+            email=new_user.email,
+            department="Unassigned",
+            designation="Unassigned",
+            status="BENCH"
+        )
+        db.add(emp)
+        db.commit()
+        db.refresh(emp)
     return new_user
 
 @router.get("/users", response_model=List[schemas.UserResponse])

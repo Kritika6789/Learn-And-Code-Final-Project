@@ -35,6 +35,7 @@ class EmployeeBase(BaseModel):
 
 class EmployeeCreate(EmployeeBase):
     user_id: int
+    manager_id: Optional[int] = None
 
 class EmployeeResponse(EmployeeBase):
     id: int
