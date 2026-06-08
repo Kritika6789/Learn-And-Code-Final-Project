@@ -83,15 +83,31 @@ def create_allocation(alloc: AllocationCreateReq, db: Session = Depends(get_db),
     if total_util > 100:
         raise HTTPException(status_code=400, detail=f"Employee cannot be allocated more than 100% in this period. Overlapping util will be {total_util}%")
         
-    new_alloc = models.Allocation(**alloc.model_dump())
-    db.add(new_alloc)
-    
-    if new_alloc.from_date <= date.today() <= new_alloc.to_date:
-        emp.status = "ALLOCATED"
+    if alloc.from_date < proj.start_date or alloc.to_date > proj.end_date:
+        raise HTTPException(status_code=400, detail=f"Allocation dates ({alloc.from_date} to {alloc.to_date}) must be within project dates ({proj.start_date} to {proj.end_date}).")
         
-    db.commit()
-    db.refresh(new_alloc)
-    return new_alloc
+    try:
+        new_alloc = models.Allocation(
+            employee_id=alloc.employee_id,
+            project_id=alloc.project_id,
+            utilisation_percentage=alloc.utilisation_percentage,
+            from_date=alloc.from_date,
+            to_date=alloc.to_date
+        )
+        db.add(new_alloc)
+        
+        if new_alloc.from_date <= date.today() <= new_alloc.to_date:
+            emp.status = "ALLOCATED"
+            
+        db.commit()
+        db.refresh(new_alloc)
+        return new_alloc
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating allocation: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.put("/allocations/{alloc_id}/end")
 def end_allocation(alloc_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
