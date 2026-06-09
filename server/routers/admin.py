@@ -266,6 +266,21 @@ def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Sessi
     db.refresh(new_ms)
     return new_ms
 
+@router.put("/projects/{project_id}/milestones/{milestone_id}", response_model=schemas.MilestoneResponse)
+def update_milestone(project_id: int, milestone_id: int, milestone_update: schemas.MilestoneUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    ms = db.query(models.Milestone).filter(models.Milestone.id == milestone_id, models.Milestone.project_id == project_id).first()
+    if not ms:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+        
+    update_data = milestone_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(ms, key, value)
+        
+    db.commit()
+    db.refresh(ms)
+    return ms
+
 # --- System Configuration ---
 @router.get("/config")
 def get_config(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):

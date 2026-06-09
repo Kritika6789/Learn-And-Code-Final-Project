@@ -90,6 +90,12 @@ class MilestoneCreate(BaseModel):
     status: str
     story_points: Optional[int] = 0
 
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = None
+    due_date: Optional[date] = None
+    status: Optional[str] = None
+    story_points: Optional[int] = None
+
 class MilestoneResponse(MilestoneCreate):
     id: int
     project_id: int
