@@ -644,10 +644,27 @@ def view_all_allocations():
         if not allocs:
             print("No active allocations found.")
         else:
-            headers = ["Emp ID", "Project ID", "%", "From", "To"]
-            rows = [[a["employee_id"], a["project_id"], f"{a['utilisation_percentage']}%", a["from_date"], a["to_date"]] for a in allocs]
-            ui.print_table(headers, rows, [8, 12, 6, 12, 12])
-            print(f"\nTotal Active Allocations: {len(allocs)}")
+            headers = ["Employee", "Project", "%", "From", "To"]
+            rows = []
+            from datetime import datetime
+            for a in allocs:
+                try:
+                    fd = datetime.strptime(a["from_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                    td = datetime.strptime(a["to_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                except:
+                    fd = a["from_date"]
+                    td = a["to_date"]
+                rows.append([a["employee_name"], a["project_name"], f"{a['utilisation_percentage']}%", fd, td])
+            
+            widths = [18, 18, 6, 12, 12]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 62)
+            for r in rows:
+                print("".join(str(c).ljust(widths[i]) for i, c in enumerate(r)))
+            print("─" * 62)
+            
+            print(f"Total Active Allocations: {len(allocs)}")
     except api.APIError as e:
         ui.print_error(e.message)
 
