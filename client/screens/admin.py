@@ -359,7 +359,15 @@ def view_all_projects():
                 sp_done = p.get("completed_story_points", 0)
                 sp_tot = p.get("total_story_points", 0)
                 rows.append([p["id"], p["name"], p.get("manager_name", "Unknown"), ed, p["status"], f"{sp_done} / {sp_tot}"])
-            ui.print_table(headers, rows, [6, 18, 14, 12, 10, 14])
+            
+            widths = [6, 19, 15, 13, 11, 14]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 78)
+            for r in rows:
+                row_str = "".join(str(cell).ljust(widths[i]) for i, cell in enumerate(r))
+                print(row_str)
+            print("─" * 78)
     except api.APIError as e:
         ui.print_error(e.message)
     ui.get_input("\n[B] Back > ")
