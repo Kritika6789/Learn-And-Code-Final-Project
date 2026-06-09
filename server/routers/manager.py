@@ -274,7 +274,12 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
             response = model.generate_content(prompt)
             return {"results": response.text}
         except Exception as e:
-            return {"results": f"AI Error: {str(e)}\n\n(Mocked Results: Priya Sharma is a good match.)"}
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
+                clean_err = "API Quota Exceeded (429). Please try again later or check billing."
+            else:
+                clean_err = "An unexpected error occurred while calling the Gemini API."
+            return {"results": f"AI Error: {clean_err}\n\n(Mocked Results: Priya Sharma is a good match.)"}
     else:
         return {"results": "LLM_API_KEY is not configured in System Configuration. \n\nMocked Results: \n1. Priya Sharma - Good match based on skills."}
 
@@ -310,7 +315,12 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
             response = model.generate_content(prompt)
             return {"summary": response.text}
         except Exception as e:
-            return {"summary": f"AI Error: {str(e)}"}
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
+                clean_err = "API Quota Exceeded (429)."
+            else:
+                clean_err = "An unexpected error occurred."
+            return {"summary": f"AI Error: {clean_err}\n\nMock: The project looks on track but verify milestone deadlines."}
     else:
         return {"summary": "LLM_API_KEY is not configured. \n\nMock: The project looks on track but verify milestone deadlines."}
 
