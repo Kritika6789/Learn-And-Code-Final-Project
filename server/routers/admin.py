@@ -124,6 +124,21 @@ def get_employees(db: Session = Depends(get_db), current_user: models.User = Dep
     check_admin(current_user)
     return db.query(models.Employee).all()
 
+@router.put("/employees/{employee_id}")
+def update_employee(employee_id: int, employee_update: schemas.EmployeeUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    update_data = employee_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(emp, key, value)
+        
+    db.commit()
+    db.refresh(emp)
+    return {"message": "Employee updated successfully"}
+
 @router.put("/employees/{emp_id}/deactivate")
 def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)

@@ -126,12 +126,18 @@ def view_all_employees():
             print("No employees found.")
         else:
             headers = ["ID", "Name", "Department", "Status"]
-            rows = [[e["id"], e["full_name"], e["department"], e["status"]] for e in employees]
-            ui.print_table(headers, rows, [6, 18, 14, 12])
+            widths = [6, 17, 14, 12]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 46)
+            for e in employees:
+                row = [e["id"], e["full_name"], e["department"], e["status"]]
+                print("".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
+            print("─" * 46)
 
             allocated = sum(1 for e in employees if e["status"] == "ALLOCATED")
             bench = len(employees) - allocated
-            print(f"\nTotal: {len(employees)}   |   Allocated: {allocated}   |   Bench: {bench}")
+            print(f"Total: {len(employees)}   |   Allocated: {allocated}   |   Bench: {bench}\n")
 
         print("\n[F] Filter by Status / Department     [B] Back")
         choice = ui.get_input("> ").upper()
@@ -139,8 +145,13 @@ def view_all_employees():
             filter_val = ui.get_input("Enter status (BENCH/ALLOCATED) or department name: ").upper()
             filtered = [e for e in employees if e["status"] == filter_val or e["department"].upper() == filter_val]
             if filtered:
-                rows = [[e["id"], e["full_name"], e["department"], e["status"]] for e in filtered]
-                ui.print_table(headers, rows, [6, 18, 14, 12])
+                header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+                print("\n" + header_str)
+                print("─" * 46)
+                for e in filtered:
+                    row = [e["id"], e["full_name"], e["department"], e["status"]]
+                    print("".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
+                print("─" * 46)
             else:
                 print("No matching employees.")
             ui.get_input("Press Enter to continue...")
@@ -163,11 +174,31 @@ def update_employee():
             ui.get_input("Press Enter to continue...")
             return
         print(f"\n── {emp['full_name']} ─────────────────────────────────")
-        print(f"Department  : {emp['department']}")
-        print(f"Designation : {emp['designation']}")
+        dept = ui.get_input(f"Department  : {str(emp['department']).ljust(20)}(editable) ")
+        desg = ui.get_input(f"Designation : {str(emp['designation']).ljust(20)}(editable) ")
         print(f"Status      : {emp['status']}")
-        print("\n(Update functionality via direct API)")
-        ui.get_input("Press Enter to continue...")
+        print("──────────────────────────────────────────────")
+        
+        payload = {}
+        if dept: payload["department"] = dept
+        if desg: payload["designation"] = desg
+        
+        print("[S] Save     [B] Back")
+        choice = ui.get_input("> ").upper()
+        if choice == "S":
+            if not payload:
+                print("No changes to save.")
+            else:
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}",
+                        json=payload,
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Employee updated successfully.")
+        else:
+            return
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")

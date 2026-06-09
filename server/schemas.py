@@ -37,6 +37,10 @@ class EmployeeCreate(EmployeeBase):
     user_id: int
     manager_id: Optional[int] = None
 
+class EmployeeUpdate(BaseModel):
+    department: Optional[str] = None
+    designation: Optional[str] = None
+
 class EmployeeResponse(EmployeeBase):
     id: int
     user_id: Optional[int]
