@@ -301,15 +301,16 @@ def create_project():
     ui.clear_screen()
     ui.print_header("CREATE PROJECT")
 
-    name = ui.get_input("Project Name  : ")
-    description = ui.get_input("Description   : ")
-    start_date = ui.get_input("Start Date    : (YYYY-MM-DD) ")
-    end_date = ui.get_input("End Date      : (YYYY-MM-DD) ")
-    print("Status        : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD")
-    status_choice = ui.get_input("Enter choice  : ")
+    name = ui.get_input("Project Name        : ")
+    description = ui.get_input("Description         : ")
+    start_date = ui.get_input("Start Date          : (DD-MM-YYYY) ")
+    end_date = ui.get_input("End Date            : (DD-MM-YYYY) ")
+    print("Status              : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD")
+    status_choice = ui.get_input("Enter choice        : ")
     statuses = {"1": "PLANNED", "2": "ACTIVE", "3": "ON_HOLD"}
     status = statuses.get(status_choice, "PLANNED")
-    manager_id = ui.get_input("Assign Manager: (Enter Manager User ID) ")
+    manager_id = ui.get_input("Assign Manager      : (Enter Manager ID) ")
+    story_points = ui.get_input("Total Story Points  : ")
 
     if not all([name, start_date, end_date, manager_id]):
         ui.print_error("Required fields missing")
@@ -326,8 +327,10 @@ def create_project():
                     f"{api.BASE_URL}/admin/projects",
                     json={
                         "name": name, "description": description,
-                        "start_date": start_date, "end_date": end_date,
-                        "status": status, "manager_id": int(manager_id)
+                        "start_date": "-".join(start_date.split("-")[::-1]) if "-" in start_date else start_date,
+                        "end_date": "-".join(end_date.split("-")[::-1]) if "-" in end_date else end_date,
+                        "status": status, "manager_id": int(manager_id),
+                        "total_story_points": int(story_points) if story_points.isdigit() else 0
                     },
                     headers=api.get_headers()
                 )
@@ -368,20 +371,22 @@ def update_project_details():
             return
 
         print("\nLeave blank to keep current value.")
-        name = ui.get_input(f"Project Name  [{proj['name']}]: ")
-        desc = ui.get_input(f"Description   [{proj.get('description', '')}]: ")
-        start_date = ui.get_input(f"Start Date    [{proj['start_date']}]: ")
-        end_date = ui.get_input(f"End Date      [{proj['end_date']}]: ")
-        status = ui.get_input(f"Status        [{proj['status']}]: ")
-        manager_id = ui.get_input(f"Manager ID    [{proj['manager_id']}]: ")
+        name = ui.get_input(f"Project Name        [{proj['name']}]: ")
+        desc = ui.get_input(f"Description         [{proj.get('description', '')}]: ")
+        start_date = ui.get_input(f"Start Date          [{proj['start_date']}]: ")
+        end_date = ui.get_input(f"End Date            [{proj['end_date']}]: ")
+        status = ui.get_input(f"Status              [{proj['status']}]: ")
+        manager_id = ui.get_input(f"Manager ID          [{proj['manager_id']}]: ")
+        story_points = ui.get_input(f"Total Story Points  [{proj.get('total_story_points', 0)}]: ")
 
         payload = {}
         if name: payload["name"] = name
         if desc: payload["description"] = desc
-        if start_date: payload["start_date"] = start_date
-        if end_date: payload["end_date"] = end_date
+        if start_date: payload["start_date"] = "-".join(start_date.split("-")[::-1]) if "-" in start_date else start_date
+        if end_date: payload["end_date"] = "-".join(end_date.split("-")[::-1]) if "-" in end_date else end_date
         if status: payload["status"] = status
         if manager_id: payload["manager_id"] = int(manager_id)
+        if story_points and story_points.isdigit(): payload["total_story_points"] = int(story_points)
 
         if not payload:
             print("No changes to save.")

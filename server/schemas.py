@@ -66,6 +66,7 @@ class ProjectCreate(BaseModel):
     end_date: date
     status: str
     manager_id: int
+    total_story_points: Optional[int] = 0
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -74,6 +75,7 @@ class ProjectUpdate(BaseModel):
     end_date: Optional[date] = None
     status: Optional[str] = None
     manager_id: Optional[int] = None
+    total_story_points: Optional[int] = None
 
 class ProjectResponse(ProjectCreate):
     id: int

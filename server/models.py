@@ -57,6 +57,7 @@ class Project(Base):
     end_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default="PLANNED") # PLANNED, ACTIVE, ON_HOLD
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    total_story_points = Column(Integer, default=0)
 
     manager = relationship("User", back_populates="managed_projects")
     milestones = relationship("Milestone", back_populates="project")
