@@ -210,16 +210,25 @@ def deactivate_employee():
     if not emp_id:
         return
     try:
-        employees = api.get_employees()
-        emp = next((e for e in employees if str(e["id"]) == emp_id), None)
-        if not emp:
-            ui.print_error("Employee not found")
-            ui.get_input("Press Enter to continue...")
-            return
+        emp = api.handle_response(
+            __import__('requests').get(f"{api.BASE_URL}/admin/employees/{emp_id}", headers=api.get_headers())
+        )
 
         print(f"\n── {emp['full_name']} ─────────────────────────────────")
         print(f"Department : {emp['department']}")
-        print(f"Status     : {emp['status']}")
+        
+        allocs = emp.get("active_allocations", [])
+        if allocs:
+            total_util = sum(a['percentage'] for a in allocs)
+            print(f"Status     : ALLOCATED ({total_util}%)\n")
+            print(f"⚠  Warning: This employee has {len(allocs)} active allocations.")
+            print("   Ending their employment will remove them from:")
+            from datetime import datetime
+            for a in allocs:
+                end_str = datetime.strptime(a['end_date'], "%Y-%m-%d").strftime("%d-%b-%y") if isinstance(a['end_date'], str) else a['end_date'].strftime("%d-%b-%y")
+                print(f"     - {a['project_name'].ljust(15)} ({a['percentage']}%,  ends {end_str})")
+        else:
+            print(f"Status     : {emp['status']}\n")
 
         print(f"\nAre you sure you want to deactivate {emp['full_name']}?")
         print("This will: set is_active = false, end all active allocations today,")
@@ -232,6 +241,11 @@ def deactivate_employee():
                 __import__('requests').put(f"{api.BASE_URL}/admin/employees/{emp_id}/deactivate", headers=api.get_headers())
             )
             ui.print_success("Employee deactivated.")
+            print("Deactivation Rules:")
+            print("\nAll active allocations are ended immediately (to_date set to today)")
+            print("The linked user account is also blocked (cannot log in)")
+            print("All historical data (timesheets, past allocations) is preserved")
+            print("Employee can be reactivated by Admin from Manage Users → View All Users\n")
         ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)

@@ -124,6 +124,32 @@ def get_employees(db: Session = Depends(get_db), current_user: models.User = Dep
     check_admin(current_user)
     return db.query(models.Employee).all()
 
+@router.get("/employees/{employee_id}")
+def get_employee_details(employee_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    today = date.today()
+    active_allocs = []
+    for a in emp.allocations:
+        if a.from_date <= today <= a.to_date:
+            active_allocs.append({
+                "project_name": a.project.name,
+                "percentage": a.utilisation_percentage,
+                "end_date": a.to_date
+            })
+            
+    return {
+        "id": emp.id,
+        "full_name": emp.full_name,
+        "department": emp.department,
+        "designation": emp.designation,
+        "status": emp.status,
+        "active_allocations": active_allocs
+    }
+
 @router.put("/employees/{employee_id}")
 def update_employee(employee_id: int, employee_update: schemas.EmployeeUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
