@@ -387,27 +387,47 @@ def update_project_details():
             ui.get_input("Press Enter to continue...")
             return
 
-        print("\nLeave blank to keep current value.")
-        name = ui.get_input(f"Project Name        [{proj['name']}]: ")
-        desc = ui.get_input(f"Description         [{proj.get('description', '')}]: ")
-        start_date = ui.get_input(f"Start Date          [{proj['start_date']}]: ")
-        end_date = ui.get_input(f"End Date            [{proj['end_date']}]: ")
-        status = ui.get_input(f"Status              [{proj['status']}]: ")
-        manager_id = ui.get_input(f"Manager ID          [{proj['manager_id']}]: ")
-        story_points = ui.get_input(f"Total Story Points  [{proj.get('total_story_points', 0)}]: ")
+        print(f"\n── {proj['name']} ───────────────────────────────")
+        name = ui.get_input(f"Project Name         : {str(proj['name']).ljust(22)}(editable) ")
+        desc = ui.get_input(f"Description          : {str(proj.get('description', '')).ljust(22)}(editable) ")
+        
+        from datetime import datetime
+        try:
+            sd = datetime.strptime(proj['start_date'], "%Y-%m-%d").strftime("%d-%b-%y")
+        except:
+            sd = proj['start_date']
+        try:
+            ed = datetime.strptime(proj['end_date'], "%Y-%m-%d").strftime("%d-%b-%y")
+        except:
+            ed = proj['end_date']
 
+        start_date = ui.get_input(f"Start Date           : {sd.ljust(22)}(editable) ")
+        end_date = ui.get_input(f"End Date             : {ed.ljust(22)}(editable) ")
+        
+        print("Status               : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD   (4) COMPLETED")
+        status_choice = ui.get_input(f"Status ({proj['status']})".ljust(23) + f": {''.ljust(22)}(editable) ")
+        
+        manager_id = ui.get_input(f"Assign Manager       : {str(proj['manager_id']).ljust(22)}(editable) ")
+        sp = proj.get('total_story_points', 0)
+        story_points = ui.get_input(f"Total Story Points   : {str(sp).ljust(22)}(editable) ")
+        print("──────────────────────────────────────────────")
+        
         payload = {}
         if name: payload["name"] = name
         if desc: payload["description"] = desc
         if start_date: payload["start_date"] = "-".join(start_date.split("-")[::-1]) if "-" in start_date else start_date
         if end_date: payload["end_date"] = "-".join(end_date.split("-")[::-1]) if "-" in end_date else end_date
-        if status: payload["status"] = status
+        
+        statuses = {"1": "PLANNED", "2": "ACTIVE", "3": "ON_HOLD", "4": "COMPLETED"}
+        if status_choice and status_choice in statuses:
+            payload["status"] = statuses[status_choice]
+            
         if manager_id: payload["manager_id"] = int(manager_id)
         if story_points and story_points.isdigit(): payload["total_story_points"] = int(story_points)
 
-        if not payload:
-            print("No changes to save.")
-            ui.get_input("Press Enter to continue...")
+        print("[S] Save     [B] Back")
+        choice = ui.get_input("> ").upper()
+        if choice != "S":
             return
 
         api.handle_response(
