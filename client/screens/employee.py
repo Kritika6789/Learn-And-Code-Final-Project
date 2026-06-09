@@ -60,13 +60,22 @@ def submit_timesheet(user):
     ui.print_header("SUBMIT TIMESHEET")
     print(f"Employee  : {user['full_name']}")
 
-    week_input = ui.get_input("Week Start: Enter date (YYYY-MM-DD) or press Enter for last Monday\n          > ")
-    if not week_input:
-        today = date.today()
-        last_monday = today - timedelta(days=today.weekday())
-        if today.weekday() == 0:
-            last_monday = today - timedelta(days=7)
-        week_input = str(last_monday)
+    while True:
+        week_input = ui.get_input("Week Start: Enter date (YYYY-MM-DD) or press Enter for last Monday\n          > ")
+        if not week_input:
+            today = date.today()
+            last_monday = today - timedelta(days=today.weekday())
+            if today.weekday() == 0:
+                last_monday = today - timedelta(days=7)
+            week_input = str(last_monday)
+            break
+        else:
+            try:
+                from datetime import datetime
+                datetime.strptime(week_input, "%Y-%m-%d")
+                break
+            except ValueError:
+                ui.print_error("Invalid date format. Please use YYYY-MM-DD.")
     
     print(f"\nWeek selected: {week_input}")
     print("Checking your active allocations for this week...")
