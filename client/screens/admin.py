@@ -291,8 +291,7 @@ def manage_projects():
         elif choice == "2":
             view_all_projects()
         elif choice == "3":
-            print("(Update project details via API)")
-            ui.get_input("Press Enter to continue...")
+            update_project_details()
         elif choice == "4":
             manage_milestones()
         elif choice == "5":
@@ -352,6 +351,56 @@ def view_all_projects():
     except api.APIError as e:
         ui.print_error(e.message)
     ui.get_input("\n[B] Back > ")
+
+def update_project_details():
+    ui.clear_screen()
+    ui.print_header("UPDATE PROJECT")
+    project_id = ui.get_input("Enter Project ID: ")
+    if not project_id:
+        return
+
+    try:
+        projects = api.get_projects()
+        proj = next((p for p in projects if str(p["id"]) == project_id), None)
+        if not proj:
+            ui.print_error("Project not found")
+            ui.get_input("Press Enter to continue...")
+            return
+
+        print("\nLeave blank to keep current value.")
+        name = ui.get_input(f"Project Name  [{proj['name']}]: ")
+        desc = ui.get_input(f"Description   [{proj.get('description', '')}]: ")
+        start_date = ui.get_input(f"Start Date    [{proj['start_date']}]: ")
+        end_date = ui.get_input(f"End Date      [{proj['end_date']}]: ")
+        status = ui.get_input(f"Status        [{proj['status']}]: ")
+        manager_id = ui.get_input(f"Manager ID    [{proj['manager_id']}]: ")
+
+        payload = {}
+        if name: payload["name"] = name
+        if desc: payload["description"] = desc
+        if start_date: payload["start_date"] = start_date
+        if end_date: payload["end_date"] = end_date
+        if status: payload["status"] = status
+        if manager_id: payload["manager_id"] = int(manager_id)
+
+        if not payload:
+            print("No changes to save.")
+            ui.get_input("Press Enter to continue...")
+            return
+
+        api.handle_response(
+            __import__('requests').put(
+                f"{api.BASE_URL}/admin/projects/{project_id}",
+                json=payload,
+                headers=api.get_headers()
+            )
+        )
+        ui.print_success("Project updated successfully.")
+    except api.APIError as e:
+        ui.print_error(e.message)
+    except ValueError:
+        ui.print_error("Invalid input type")
+    ui.get_input("\nPress Enter to continue...")
 
 def manage_milestones():
     ui.clear_screen()

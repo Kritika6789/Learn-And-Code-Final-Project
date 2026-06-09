@@ -216,6 +216,26 @@ def get_project_details(project_id: int, db: Session = Depends(get_db), current_
         "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status} for m in proj.milestones]
     }
 
+@router.put("/projects/{project_id}", response_model=schemas.ProjectResponse)
+def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    update_data = project_update.model_dump(exclude_unset=True)
+    if "manager_id" in update_data:
+        manager = db.query(models.User).filter(models.User.id == update_data["manager_id"], models.User.role == "MANAGER").first()
+        if not manager:
+            raise HTTPException(status_code=400, detail="Invalid Manager ID or user is not a Manager")
+            
+    for key, value in update_data.items():
+        setattr(proj, key, value)
+        
+    db.commit()
+    db.refresh(proj)
+    return proj
+
 @router.post("/projects/{project_id}/milestones", response_model=schemas.MilestoneResponse)
 def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)

@@ -67,6 +67,14 @@ class ProjectCreate(BaseModel):
     status: str
     manager_id: int
 
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: Optional[str] = None
+    manager_id: Optional[int] = None
+
 class ProjectResponse(ProjectCreate):
     id: int
 
