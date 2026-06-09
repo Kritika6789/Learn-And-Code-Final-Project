@@ -37,6 +37,10 @@ class EmployeeCreate(EmployeeBase):
     user_id: int
     manager_id: Optional[int] = None
 
+class EmployeeUpdate(BaseModel):
+    department: Optional[str] = None
+    designation: Optional[str] = None
+
 class EmployeeResponse(EmployeeBase):
     id: int
     user_id: Optional[int]
@@ -66,6 +70,16 @@ class ProjectCreate(BaseModel):
     end_date: date
     status: str
     manager_id: int
+    total_story_points: Optional[int] = 0
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: Optional[str] = None
+    manager_id: Optional[int] = None
+    total_story_points: Optional[int] = None
 
 class ProjectResponse(ProjectCreate):
     id: int
@@ -78,6 +92,13 @@ class MilestoneCreate(BaseModel):
     title: str
     due_date: date
     status: str
+    story_points: Optional[int] = 0
+
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = None
+    due_date: Optional[date] = None
+    status: Optional[str] = None
+    story_points: Optional[int] = None
 
 class MilestoneResponse(MilestoneCreate):
     id: int

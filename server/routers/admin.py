@@ -124,6 +124,47 @@ def get_employees(db: Session = Depends(get_db), current_user: models.User = Dep
     check_admin(current_user)
     return db.query(models.Employee).all()
 
+@router.get("/employees/{employee_id}")
+def get_employee_details(employee_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    today = date.today()
+    active_allocs = []
+    for a in emp.allocations:
+        if a.from_date <= today <= a.to_date:
+            active_allocs.append({
+                "project_name": a.project.name,
+                "percentage": a.utilisation_percentage,
+                "end_date": a.to_date
+            })
+            
+    return {
+        "id": emp.id,
+        "full_name": emp.full_name,
+        "department": emp.department,
+        "designation": emp.designation,
+        "status": emp.status,
+        "active_allocations": active_allocs
+    }
+
+@router.put("/employees/{employee_id}")
+def update_employee(employee_id: int, employee_update: schemas.EmployeeUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    update_data = employee_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(emp, key, value)
+        
+    db.commit()
+    db.refresh(emp)
+    return {"message": "Employee updated successfully"}
+
 @router.put("/employees/{emp_id}/deactivate")
 def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
@@ -135,11 +176,12 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
     if emp.user:
         emp.user.is_active = False
     
-    # End all active allocations to today
+    # End all active allocations to yesterday so they are immediately free today
     today = date.today()
+    from datetime import timedelta
     for alloc in emp.allocations:
         if alloc.to_date >= today:
-            alloc.to_date = today
+            alloc.to_date = today - timedelta(days=1)
     
     emp.status = "BENCH"
     db.commit()
@@ -183,6 +225,27 @@ def get_skills(emp_id: int, db: Session = Depends(get_db), current_user: models.
     check_admin(current_user)
     return db.query(models.Skill).filter(models.Skill.employee_id == emp_id).all()
 
+@router.put("/employees/{emp_id}/skills/{skill_id}")
+def update_skill(emp_id: int, skill_id: int, payload: dict, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    skill = db.query(models.Skill).filter(models.Skill.id == skill_id, models.Skill.employee_id == emp_id).first()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    if "proficiency_level" in payload:
+        skill.proficiency_level = payload["proficiency_level"]
+        db.commit()
+    return {"message": "Skill updated successfully"}
+
+@router.delete("/employees/{emp_id}/skills/{skill_id}")
+def delete_skill(emp_id: int, skill_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    skill = db.query(models.Skill).filter(models.Skill.id == skill_id, models.Skill.employee_id == emp_id).first()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    db.delete(skill)
+    db.commit()
+    return {"message": "Skill deleted successfully"}
+
 # --- Projects Management ---
 @router.post("/projects", response_model=schemas.ProjectResponse)
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -197,10 +260,61 @@ def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)
     db.refresh(new_proj)
     return new_proj
 
-@router.get("/projects", response_model=List[schemas.ProjectResponse])
+@router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
-    return db.query(models.Project).all()
+    projects = db.query(models.Project).all()
+    res = []
+    for p in projects:
+        completed_sp = sum(m.story_points for m in p.milestones if m.status == "DONE" and m.story_points)
+        res.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "start_date": p.start_date,
+            "manager_id": p.manager_id,
+            "manager_name": p.manager.full_name if p.manager else "Unknown",
+            "end_date": p.end_date,
+            "status": p.status,
+            "total_story_points": p.total_story_points or 0,
+            "completed_story_points": completed_sp
+        })
+    return res
+
+@router.get("/projects/{project_id}")
+def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {
+        "id": proj.id,
+        "name": proj.name,
+        "status": proj.status,
+        "end_date": proj.end_date,
+        "total_story_points": proj.total_story_points or 0,
+        "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status, "story_points": m.story_points or 0} for m in proj.milestones]
+    }
+
+@router.put("/projects/{project_id}", response_model=schemas.ProjectResponse)
+def update_project(project_id: int, project_update: schemas.ProjectUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    update_data = project_update.model_dump(exclude_unset=True)
+    if "manager_id" in update_data:
+        manager = db.query(models.User).filter(models.User.id == update_data["manager_id"], models.User.role == "MANAGER").first()
+        if not manager:
+            raise HTTPException(status_code=400, detail="Invalid Manager ID or user is not a Manager")
+            
+    for key, value in update_data.items():
+        setattr(proj, key, value)
+        
+    db.commit()
+    db.refresh(proj)
+    return proj
 
 @router.post("/projects/{project_id}/milestones", response_model=schemas.MilestoneResponse)
 def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -214,6 +328,21 @@ def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Sessi
     db.commit()
     db.refresh(new_ms)
     return new_ms
+
+@router.put("/projects/{project_id}/milestones/{milestone_id}", response_model=schemas.MilestoneResponse)
+def update_milestone(project_id: int, milestone_id: int, milestone_update: schemas.MilestoneUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    ms = db.query(models.Milestone).filter(models.Milestone.id == milestone_id, models.Milestone.project_id == project_id).first()
+    if not ms:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+        
+    update_data = milestone_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(ms, key, value)
+        
+    db.commit()
+    db.refresh(ms)
+    return ms
 
 # --- System Configuration ---
 @router.get("/config")

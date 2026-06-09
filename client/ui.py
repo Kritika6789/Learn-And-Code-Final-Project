@@ -19,11 +19,11 @@ def print_welcome(name, role):
         title = "ADMIN PANEL"
         subtitle = f"Welcome, {name}  |  {now}"
     elif role == "MANAGER":
-        title = f"Welcome, {name}!"
-        subtitle = f"{now}"
+        title = f"Welcome, {name}!  |  {now}"
+        subtitle = None
     else:
         title = f"Welcome, {name}!"
-        subtitle = datetime.now().strftime("%d-%m-%Y")
+        subtitle = datetime.now().strftime("%d-%b-%Y")
     print_header(title, subtitle)
 
 def print_separator():
@@ -71,7 +71,6 @@ def print_table(headers, rows, col_widths=None):
     for i, h in enumerate(headers):
         header_line += str(h).ljust(col_widths[i])
     print(header_line)
-    print_separator()
 
     for row in rows:
         line = ""

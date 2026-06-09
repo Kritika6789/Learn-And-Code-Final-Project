@@ -126,12 +126,18 @@ def view_all_employees():
             print("No employees found.")
         else:
             headers = ["ID", "Name", "Department", "Status"]
-            rows = [[e["id"], e["full_name"], e["department"], e["status"]] for e in employees]
-            ui.print_table(headers, rows, [6, 18, 14, 12])
+            widths = [6, 17, 14, 12]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 46)
+            for e in employees:
+                row = [e["id"], e["full_name"], e["department"], e["status"]]
+                print("".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
+            print("─" * 46)
 
             allocated = sum(1 for e in employees if e["status"] == "ALLOCATED")
             bench = len(employees) - allocated
-            print(f"\nTotal: {len(employees)}   |   Allocated: {allocated}   |   Bench: {bench}")
+            print(f"Total: {len(employees)}   |   Allocated: {allocated}   |   Bench: {bench}\n")
 
         print("\n[F] Filter by Status / Department     [B] Back")
         choice = ui.get_input("> ").upper()
@@ -139,8 +145,13 @@ def view_all_employees():
             filter_val = ui.get_input("Enter status (BENCH/ALLOCATED) or department name: ").upper()
             filtered = [e for e in employees if e["status"] == filter_val or e["department"].upper() == filter_val]
             if filtered:
-                rows = [[e["id"], e["full_name"], e["department"], e["status"]] for e in filtered]
-                ui.print_table(headers, rows, [6, 18, 14, 12])
+                header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+                print("\n" + header_str)
+                print("─" * 46)
+                for e in filtered:
+                    row = [e["id"], e["full_name"], e["department"], e["status"]]
+                    print("".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
+                print("─" * 46)
             else:
                 print("No matching employees.")
             ui.get_input("Press Enter to continue...")
@@ -163,11 +174,31 @@ def update_employee():
             ui.get_input("Press Enter to continue...")
             return
         print(f"\n── {emp['full_name']} ─────────────────────────────────")
-        print(f"Department  : {emp['department']}")
-        print(f"Designation : {emp['designation']}")
+        dept = ui.get_input(f"Department  : {str(emp['department']).ljust(20)}(editable) ")
+        desg = ui.get_input(f"Designation : {str(emp['designation']).ljust(20)}(editable) ")
         print(f"Status      : {emp['status']}")
-        print("\n(Update functionality via direct API)")
-        ui.get_input("Press Enter to continue...")
+        print("──────────────────────────────────────────────")
+        
+        payload = {}
+        if dept: payload["department"] = dept
+        if desg: payload["designation"] = desg
+        
+        print("[S] Save     [B] Back")
+        choice = ui.get_input("> ").upper()
+        if choice == "S":
+            if not payload:
+                print("No changes to save.")
+            else:
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}",
+                        json=payload,
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Employee updated successfully.")
+        else:
+            return
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
@@ -179,16 +210,25 @@ def deactivate_employee():
     if not emp_id:
         return
     try:
-        employees = api.get_employees()
-        emp = next((e for e in employees if str(e["id"]) == emp_id), None)
-        if not emp:
-            ui.print_error("Employee not found")
-            ui.get_input("Press Enter to continue...")
-            return
+        emp = api.handle_response(
+            __import__('requests').get(f"{api.BASE_URL}/admin/employees/{emp_id}", headers=api.get_headers())
+        )
 
         print(f"\n── {emp['full_name']} ─────────────────────────────────")
         print(f"Department : {emp['department']}")
-        print(f"Status     : {emp['status']}")
+        
+        allocs = emp.get("active_allocations", [])
+        if allocs:
+            total_util = sum(a['percentage'] for a in allocs)
+            print(f"Status     : ALLOCATED ({total_util}%)\n")
+            print(f"⚠  Warning: This employee has {len(allocs)} active allocations.")
+            print("   Ending their employment will remove them from:")
+            from datetime import datetime
+            for a in allocs:
+                end_str = datetime.strptime(a['end_date'], "%Y-%m-%d").strftime("%d-%b-%y") if isinstance(a['end_date'], str) else a['end_date'].strftime("%d-%b-%y")
+                print(f"     - {a['project_name'].ljust(15)} ({a['percentage']}%,  ends {end_str})")
+        else:
+            print(f"Status     : {emp['status']}\n")
 
         print(f"\nAre you sure you want to deactivate {emp['full_name']}?")
         print("This will: set is_active = false, end all active allocations today,")
@@ -201,6 +241,11 @@ def deactivate_employee():
                 __import__('requests').put(f"{api.BASE_URL}/admin/employees/{emp_id}/deactivate", headers=api.get_headers())
             )
             ui.print_success("Employee deactivated.")
+            print("Deactivation Rules:")
+            print("\nAll active allocations are ended immediately (to_date set to today)")
+            print("The linked user account is also blocked (cannot log in)")
+            print("All historical data (timesheets, past allocations) is preserved")
+            print("Employee can be reactivated by Admin from Manage Users → View All Users\n")
         ui.get_input("Press Enter to continue...")
     except api.APIError as e:
         ui.print_error(e.message)
@@ -266,6 +311,44 @@ def manage_skills():
                     )
                 )
                 ui.print_success("Skill added.")
+            elif choice == "2":
+                s_idx = ui.get_input("Enter Skill # : ")
+                if not s_idx.isdigit() or int(s_idx) < 1 or int(s_idx) > len(skills):
+                    ui.print_error("Invalid skill index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                s_id = skills[int(s_idx) - 1]["id"]
+                
+                print("New Level : (1) Beginner  (2) Intermediate  (3) Advanced")
+                prof_choice = ui.get_input("Enter choice: ")
+                levels = {"1": "Beginner", "2": "Intermediate", "3": "Advanced"}
+                proficiency = levels.get(prof_choice, "Beginner")
+                
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}/skills/{s_id}",
+                        json={"proficiency_level": proficiency},
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Proficiency level updated.")
+                ui.get_input("Press Enter to continue...")
+            elif choice == "3":
+                s_idx = ui.get_input("Enter Skill # to remove: ")
+                if not s_idx.isdigit() or int(s_idx) < 1 or int(s_idx) > len(skills):
+                    ui.print_error("Invalid skill index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                s_id = skills[int(s_idx) - 1]["id"]
+                
+                api.handle_response(
+                    __import__('requests').delete(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}/skills/{s_id}",
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Skill removed.")
+                ui.get_input("Press Enter to continue...")
             elif choice == "4":
                 return
         except api.APIError as e:
@@ -291,8 +374,7 @@ def manage_projects():
         elif choice == "2":
             view_all_projects()
         elif choice == "3":
-            print("(Update project details via API)")
-            ui.get_input("Press Enter to continue...")
+            update_project_details()
         elif choice == "4":
             manage_milestones()
         elif choice == "5":
@@ -302,15 +384,16 @@ def create_project():
     ui.clear_screen()
     ui.print_header("CREATE PROJECT")
 
-    name = ui.get_input("Project Name  : ")
-    description = ui.get_input("Description   : ")
-    start_date = ui.get_input("Start Date    : (YYYY-MM-DD) ")
-    end_date = ui.get_input("End Date      : (YYYY-MM-DD) ")
-    print("Status        : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD")
-    status_choice = ui.get_input("Enter choice  : ")
+    name = ui.get_input("Project Name        : ")
+    description = ui.get_input("Description         : ")
+    start_date = ui.get_input("Start Date          : (DD-MM-YYYY) ")
+    end_date = ui.get_input("End Date            : (DD-MM-YYYY) ")
+    print("Status              : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD")
+    status_choice = ui.get_input("Enter choice        : ")
     statuses = {"1": "PLANNED", "2": "ACTIVE", "3": "ON_HOLD"}
     status = statuses.get(status_choice, "PLANNED")
-    manager_id = ui.get_input("Assign Manager: (Enter Manager User ID) ")
+    manager_id = ui.get_input("Assign Manager      : (Enter Manager ID) ")
+    story_points = ui.get_input("Total Story Points  : ")
 
     if not all([name, start_date, end_date, manager_id]):
         ui.print_error("Required fields missing")
@@ -327,8 +410,10 @@ def create_project():
                     f"{api.BASE_URL}/admin/projects",
                     json={
                         "name": name, "description": description,
-                        "start_date": start_date, "end_date": end_date,
-                        "status": status, "manager_id": int(manager_id)
+                        "start_date": "-".join(start_date.split("-")[::-1]) if "-" in start_date else start_date,
+                        "end_date": "-".join(end_date.split("-")[::-1]) if "-" in end_date else end_date,
+                        "status": status, "manager_id": int(manager_id),
+                        "total_story_points": int(story_points) if story_points.isdigit() else 0
                     },
                     headers=api.get_headers()
                 )
@@ -346,12 +431,101 @@ def view_all_projects():
         if not projects:
             print("No projects found.")
         else:
-            headers = ["ID", "Name", "Manager ID", "End Date", "Status"]
-            rows = [[p["id"], p["name"], p["manager_id"], p["end_date"], p["status"]] for p in projects]
-            ui.print_table(headers, rows, [6, 18, 12, 12, 10])
+            headers = ["ID", "Name", "Manager", "End Date", "Status", "SP Done/Total"]
+            rows = []
+            from datetime import datetime
+            for p in projects:
+                try:
+                    ed = datetime.strptime(p["end_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                except:
+                    ed = p["end_date"]
+                sp_done = p.get("completed_story_points", 0)
+                sp_tot = p.get("total_story_points", 0)
+                rows.append([p["id"], p["name"], p.get("manager_name", "Unknown"), ed, p["status"], f"{sp_done} / {sp_tot}"])
+            
+            widths = [6, 19, 15, 13, 11, 14]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 78)
+            for r in rows:
+                row_str = "".join(str(cell).ljust(widths[i]) for i, cell in enumerate(r))
+                print(row_str)
+            print("─" * 78)
     except api.APIError as e:
         ui.print_error(e.message)
     ui.get_input("\n[B] Back > ")
+
+def update_project_details():
+    ui.clear_screen()
+    ui.print_header("UPDATE PROJECT")
+    project_id = ui.get_input("Enter Project ID: ")
+    if not project_id:
+        return
+
+    try:
+        projects = api.get_projects()
+        proj = next((p for p in projects if str(p["id"]) == project_id), None)
+        if not proj:
+            ui.print_error("Project not found")
+            ui.get_input("Press Enter to continue...")
+            return
+
+        print(f"\n── {proj['name']} ───────────────────────────────")
+        name = ui.get_input(f"Project Name         : {str(proj['name']).ljust(22)}(editable) ")
+        desc = ui.get_input(f"Description          : {str(proj.get('description', '')).ljust(22)}(editable) ")
+        
+        from datetime import datetime
+        try:
+            sd = datetime.strptime(proj['start_date'], "%Y-%m-%d").strftime("%d-%b-%y")
+        except:
+            sd = proj['start_date']
+        try:
+            ed = datetime.strptime(proj['end_date'], "%Y-%m-%d").strftime("%d-%b-%y")
+        except:
+            ed = proj['end_date']
+
+        start_date = ui.get_input(f"Start Date           : {sd.ljust(22)}(editable) ")
+        end_date = ui.get_input(f"End Date             : {ed.ljust(22)}(editable) ")
+        
+        print("Status               : (1) PLANNED   (2) ACTIVE   (3) ON_HOLD   (4) COMPLETED")
+        status_choice = ui.get_input(f"Status ({proj['status']})".ljust(23) + f": {''.ljust(22)}(editable) ")
+        
+        manager_id = ui.get_input(f"Assign Manager       : {str(proj['manager_id']).ljust(22)}(editable) ")
+        sp = proj.get('total_story_points', 0)
+        story_points = ui.get_input(f"Total Story Points   : {str(sp).ljust(22)}(editable) ")
+        print("──────────────────────────────────────────────")
+        
+        payload = {}
+        if name: payload["name"] = name
+        if desc: payload["description"] = desc
+        if start_date: payload["start_date"] = "-".join(start_date.split("-")[::-1]) if "-" in start_date else start_date
+        if end_date: payload["end_date"] = "-".join(end_date.split("-")[::-1]) if "-" in end_date else end_date
+        
+        statuses = {"1": "PLANNED", "2": "ACTIVE", "3": "ON_HOLD", "4": "COMPLETED"}
+        if status_choice and status_choice in statuses:
+            payload["status"] = statuses[status_choice]
+            
+        if manager_id: payload["manager_id"] = int(manager_id)
+        if story_points and story_points.isdigit(): payload["total_story_points"] = int(story_points)
+
+        print("[S] Save     [B] Back")
+        choice = ui.get_input("> ").upper()
+        if choice != "S":
+            return
+
+        api.handle_response(
+            __import__('requests').put(
+                f"{api.BASE_URL}/admin/projects/{project_id}",
+                json=payload,
+                headers=api.get_headers()
+            )
+        )
+        ui.print_success("Project updated successfully.")
+    except api.APIError as e:
+        ui.print_error(e.message)
+    except ValueError:
+        ui.print_error("Invalid input type")
+    ui.get_input("\nPress Enter to continue...")
 
 def manage_milestones():
     ui.clear_screen()
@@ -369,16 +543,38 @@ def manage_milestones():
                 ui.get_input("Press Enter to continue...")
                 return
 
-            milestones = api.handle_response(
-                __import__('requests').get(f"{api.BASE_URL}/manager/projects/{project_id}", headers=api.get_headers())
-            ).get("milestones", [])
+            proj_data = api.handle_response(
+                __import__('requests').get(f"{api.BASE_URL}/admin/projects/{project_id}", headers=api.get_headers())
+            )
+            milestones = proj_data.get("milestones", [])
+            total_sp = proj_data.get("total_story_points", 0)
 
             ui.clear_screen()
             ui.print_header("MILESTONES")
             print(f"── {proj['name']} ───────────────────────────────")
-            headers = ["#", "Title", "Due Date", "Status"]
-            rows = [[i+1, m["title"], m["due_date"], m["status"]] for i, m in enumerate(milestones)]
-            ui.print_table(headers, rows, [5, 20, 12, 14])
+            headers = ["#", "Title", "Due Date", "Story Pts", "Status"]
+            rows = []
+            completed_sp = 0
+            from datetime import datetime
+            for i, m in enumerate(milestones):
+                try:
+                    dd = datetime.strptime(m["due_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                except:
+                    dd = m["due_date"]
+                sp = m.get("story_points", 0)
+                if m["status"] == "DONE":
+                    completed_sp += sp
+                rows.append([i+1, m["title"], dd, sp, m["status"]])
+            
+            widths = [5, 20, 13, 12, 14]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 56)
+            for r in rows:
+                row_str = "".join(str(cell).ljust(widths[i]) for i, cell in enumerate(r))
+                print(row_str)
+            print("─" * 56)
+            print(f"Total: {total_sp} SP   |   Completed: {completed_sp} SP   |   Remaining: {max(0, total_sp - completed_sp)} SP\n")
 
             choice = ui.get_menu_choice([
                 "Add Milestone",
@@ -387,21 +583,48 @@ def manage_milestones():
             ])
 
             if choice == "1":
-                title = ui.get_input("Title    : ")
-                due_date = ui.get_input("Due Date : (YYYY-MM-DD) ")
-                print("Status   : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
-                st = ui.get_input("Enter choice: ")
+                print("Add Milestone sub-prompt:\n")
+                title = ui.get_input("Milestone Title  : ")
+                due_date = ui.get_input("Due Date         : (DD-MM-YYYY) ")
+                sp = ui.get_input("Story Points     : ")
+                print("Status           : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
+                st = ui.get_input("Enter choice     : ")
                 ms_statuses = {"1": "NOT_STARTED", "2": "IN_PROGRESS", "3": "DONE"}
                 ms_status = ms_statuses.get(st, "NOT_STARTED")
+                
+                dd_parsed = "-".join(due_date.split("-")[::-1]) if "-" in due_date else due_date
 
                 api.handle_response(
                     __import__('requests').post(
                         f"{api.BASE_URL}/admin/projects/{project_id}/milestones",
-                        json={"title": title, "due_date": due_date, "status": ms_status},
+                        json={"title": title, "due_date": dd_parsed, "status": ms_status, "story_points": int(sp) if sp.isdigit() else 0},
                         headers=api.get_headers()
                     )
                 )
                 ui.print_success("Milestone added.")
+                ui.get_input("Press Enter to continue...")
+            elif choice == "2":
+                print("Update Milestone Status sub-prompt:\n")
+                m_idx = ui.get_input("Enter Milestone # : ")
+                if not m_idx.isdigit() or int(m_idx) < 1 or int(m_idx) > len(milestones):
+                    ui.print_error("Invalid milestone index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                m_id = milestones[int(m_idx) - 1]["id"]
+                
+                print("New Status        : (1) NOT_STARTED   (2) IN_PROGRESS   (3) DONE")
+                st = ui.get_input("Enter choice      : ")
+                ms_statuses = {"1": "NOT_STARTED", "2": "IN_PROGRESS", "3": "DONE"}
+                ms_status = ms_statuses.get(st, "NOT_STARTED")
+                
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/projects/{project_id}/milestones/{m_id}",
+                        json={"status": ms_status},
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Milestone updated.")
                 ui.get_input("Press Enter to continue...")
             elif choice == "3":
                 return
