@@ -120,7 +120,8 @@ def end_allocation(alloc_id: int, db: Session = Depends(get_db), current_user: m
     if alloc.project.manager_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this project's allocations")
         
-    alloc.to_date = date.today()
+    from datetime import timedelta
+    alloc.to_date = date.today() - timedelta(days=1)
     
     emp = alloc.employee
     today = date.today()

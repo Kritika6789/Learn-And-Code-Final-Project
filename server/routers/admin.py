@@ -176,11 +176,12 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
     if emp.user:
         emp.user.is_active = False
     
-    # End all active allocations to today
+    # End all active allocations to yesterday so they are immediately free today
     today = date.today()
+    from datetime import timedelta
     for alloc in emp.allocations:
         if alloc.to_date >= today:
-            alloc.to_date = today
+            alloc.to_date = today - timedelta(days=1)
     
     emp.status = "BENCH"
     db.commit()
