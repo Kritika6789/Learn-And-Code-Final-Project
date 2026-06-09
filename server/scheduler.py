@@ -33,7 +33,7 @@ def update_employee_statuses():
 def start_scheduler():
     scheduler = BackgroundScheduler()
     db = SessionLocal()
-    interval = 4
+    interval = 24
     try:
         config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "SCHEDULER_INTERVAL_HOURS").first()
         if config:
