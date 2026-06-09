@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 def setup_project_and_allocation(client_admin, client_manager, db):
     # Setup project
-    proj_res = client_admin.post("/admin/projects", json={
+    proj_res = client_admin.post("/api/admin/projects", json={
         "name": "Employee Test Project",
         "description": "Test",
         "start_date": "2026-06-01",
@@ -15,7 +15,7 @@ def setup_project_and_allocation(client_admin, client_manager, db):
     project_id = proj_res.json()["id"]
     
     # Setup allocation
-    alloc_res = client_manager.post("/manager/allocations", json={
+    alloc_res = client_manager.post("/api/manager/allocations", json={
         "employee_id": 1,
         "project_id": project_id,
         "utilisation_percentage": 100,
@@ -39,7 +39,7 @@ def test_submit_valid_timesheet(client_admin, client_manager, client_employee, d
         "activity_description": "API Development"
     }
     
-    response = client_employee.post("/employee/timesheets", json=payload)
+    response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 200
     assert response.json()["hours_logged"] == 40
 
@@ -57,7 +57,7 @@ def test_max_hours_validation(client_admin, client_manager, client_employee, db)
         "activity_description": "Overtime Development"
     }
     
-    response = client_employee.post("/employee/timesheets", json=payload)
+    response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 400
     assert "exceeds maximum allowed hours" in response.json()["detail"].lower()
 

@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 def setup_project_and_employee(client_admin, db):
     # Setup test project
-    proj_res = client_admin.post("/admin/projects", json={
+    proj_res = client_admin.post("/api/admin/projects", json={
         "name": "Manager Test Project",
         "description": "Test",
         "start_date": "2026-06-01",
@@ -12,6 +12,7 @@ def setup_project_and_employee(client_admin, db):
         "manager_id": 2,
         "total_story_points": 0
     })
+    print("PROJ_RES:", proj_res.json())
     project_id = proj_res.json()["id"]
     return project_id
 
@@ -26,7 +27,7 @@ def test_allocation_bounds(client_admin, client_manager, db):
         "from_date": "2025-01-01",  # Before project start
         "to_date": "2026-12-31"
     }
-    response = client_manager.post("/manager/allocations", json=payload)
+    response = client_manager.post("/api/manager/allocations", json=payload)
     assert response.status_code == 400
     assert "cannot be outside project dates" in response.json()["detail"]
 
@@ -41,7 +42,7 @@ def test_allocation_limits(client_admin, client_manager, db):
         "from_date": "2026-06-01",
         "to_date": "2026-12-31"
     }
-    response = client_manager.post("/manager/allocations", json=payload)
+    response = client_manager.post("/api/manager/allocations", json=payload)
     assert response.status_code == 400
     assert "Utilization exceeds 100%" in response.json()["detail"]
 
@@ -52,7 +53,7 @@ def test_ai_skill_matching(mock_genai, client_manager, db):
     mock_response = type("MockResponse", (), {"text": "1, Employee User, 85%, Java, High"})
     mock_instance.generate_content.return_value = mock_response
 
-    response = client_manager.post("/manager/ai/match-skills", json={"requirement": "Java skills"})
+    response = client_manager.post("/api/manager/ai/match-skills", json={"requirement": "Java skills"})
     assert response.status_code == 200
     # The endpoint parses the raw text and returns a list of dictionaries if successful
     # Depending on how the frontend parses it, it might just return the raw text.

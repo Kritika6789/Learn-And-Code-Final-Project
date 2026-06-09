@@ -6,9 +6,10 @@ def test_create_user(client_admin):
         "full_name": "Test User",
         "email": "test@example.com",
         "username": "testuser",
+        "password": "password",
         "role": "EMPLOYEE"
     }
-    response = client_admin.post("/admin/users", json=payload)
+    response = client_admin.post("/api/admin/users", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["username"] == "testuser"
@@ -25,14 +26,14 @@ def test_create_project(client_admin):
         "manager_id": 2, # Manager user id from conftest
         "total_story_points": 100
     }
-    response = client_admin.post("/admin/projects", json=payload)
+    response = client_admin.post("/api/admin/projects", json=payload)
     assert response.status_code == 200
     assert response.json()["name"] == "Test Project"
 
 def test_deactivate_employee_ends_allocations(client_admin, db):
     # To test deactivation logic, we need an active allocation
     # Create project
-    proj_res = client_admin.post("/admin/projects", json={
+    proj_res = client_admin.post("/api/admin/projects", json={
         "name": "Deactivation Project",
         "description": "",
         "start_date": "2026-01-01",
@@ -55,10 +56,10 @@ def test_deactivate_employee_ends_allocations(client_admin, db):
     # Log in as manager to allocate
     manager_res = client_admin.post("/api/auth/login", data={"username": "manager", "password": "password"})
     mgr_token = manager_res.json()["access_token"]
-    alloc_res = client_admin.post("/manager/allocations", json=payload, headers={"Authorization": f"Bearer {mgr_token}"})
+    alloc_res = client_admin.post("/api/manager/allocations", json=payload, headers={"Authorization": f"Bearer {mgr_token}"})
     
     # Now deactivate the employee via admin route
-    deact_res = client_admin.post("/admin/employees/1/deactivate")
+    deact_res = client_admin.put("/api/admin/employees/1/deactivate")
     assert deact_res.status_code == 200
     
     # Verify employee status is deactivated and allocation is ended
