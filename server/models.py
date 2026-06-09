@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Date
 from sqlalchemy.orm import relationship
-from database import Base
+from server.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -14,21 +14,24 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     force_password_change = Column(Boolean, default=True)
 
-    employee = relationship("Employee", back_populates="user", uselist=False)
+    employee = relationship("Employee", back_populates="user", uselist=False, foreign_keys="Employee.user_id")
     managed_projects = relationship("Project", back_populates="manager")
+    team_members = relationship("Employee", back_populates="manager", foreign_keys="Employee.manager_id")
 
 class Employee(Base):
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # New column for team scoping
     full_name = Column(String, nullable=False)
     email = Column(String, nullable=False)
     department = Column(String, nullable=False)
     designation = Column(String, nullable=False)
     status = Column(String, default="BENCH") # BENCH, ALLOCATED, PARTIAL
 
-    user = relationship("User", back_populates="employee")
+    user = relationship("User", back_populates="employee", foreign_keys="Employee.user_id")
+    manager = relationship("User", back_populates="team_members", foreign_keys=[manager_id])
     skills = relationship("Skill", back_populates="employee")
     allocations = relationship("Allocation", back_populates="employee")
     timesheets = relationship("Timesheet", back_populates="employee")

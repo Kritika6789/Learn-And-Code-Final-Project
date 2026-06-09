@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
 
-import models, schemas, auth
-from database import get_db
-from dependencies import get_current_active_user
+from server import models, schemas, auth
+from server.database import get_db
+from server.dependencies import get_current_active_user
 
 router = APIRouter(
     prefix="/api/admin",
@@ -39,6 +39,19 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    # Auto-create Employee profile for EMPLOYEE or MANAGER roles
+    if new_user.role in ["EMPLOYEE", "MANAGER"]:
+        emp = models.Employee(
+            user_id=new_user.id,
+            full_name=new_user.full_name,
+            email=new_user.email,
+            department="Unassigned",
+            designation="Unassigned",
+            status="BENCH"
+        )
+        db.add(emp)
+        db.commit()
+        db.refresh(emp)
     return new_user
 
 @router.get("/users", response_model=List[schemas.UserResponse])
@@ -132,6 +145,20 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
     db.commit()
     return {"message": "Employee deactivated and active allocations ended"}
 
+@router.put("/employees/{emp_id}/manager")
+def assign_manager(emp_id: int, manager_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.user_id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    manager = db.query(models.User).filter(models.User.id == manager_id, models.User.role == "MANAGER").first()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found or invalid role")
+    
+    emp.manager_id = manager.id
+    db.commit()
+    return {"message": f"Manager assigned to employee {emp.full_name}"}
+
 # --- Skills Management ---
 @router.post("/employees/{emp_id}/skills", response_model=schemas.SkillResponse)
 def add_skill(emp_id: int, skill: schemas.SkillCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -200,8 +227,10 @@ def update_config(key: str, value: str, db: Session = Depends(get_db), current_u
     check_admin(current_user)
     conf = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == key).first()
     if not conf:
-        raise HTTPException(status_code=404, detail="Configuration key not found")
-    conf.value = value
+        conf = models.SystemConfiguration(key=key, value=value)
+        db.add(conf)
+    else:
+        conf.value = value
     db.commit()
     return {"message": f"Updated {key}"}
 

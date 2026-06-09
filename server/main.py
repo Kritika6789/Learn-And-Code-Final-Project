@@ -4,10 +4,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-import models, schemas, auth, scheduler
-from database import engine, get_db
-from dependencies import get_current_active_user
-from routers import admin, manager, employee
+from server import models, schemas, auth, scheduler
+from server.database import engine, get_db
+from server.dependencies import get_current_active_user
+from server.routers import admin, manager, employee
 
 app = FastAPI(title="PRM Tool API")
 app.include_router(admin.router)
@@ -16,9 +16,11 @@ app.include_router(employee.router)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    msg = ", ".join([f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in errors])
     return JSONResponse(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        content={"detail": "Incorrect username or password", "body": exc.errors()},
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": f"Validation Error: {msg}"},
     )
 
 @app.on_event("startup")
