@@ -15,7 +15,7 @@ def update_employee_statuses():
         today = date.today()
         
         for emp in employees:
-            active_allocs = [a for a in emp.allocations if a.from_date <= today < a.to_date]
+            active_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
             total_util = sum(a.utilisation_percentage for a in active_allocs)
             
             if total_util == 0:
