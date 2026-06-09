@@ -198,6 +198,27 @@ def get_skills(emp_id: int, db: Session = Depends(get_db), current_user: models.
     check_admin(current_user)
     return db.query(models.Skill).filter(models.Skill.employee_id == emp_id).all()
 
+@router.put("/employees/{emp_id}/skills/{skill_id}")
+def update_skill(emp_id: int, skill_id: int, payload: dict, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    skill = db.query(models.Skill).filter(models.Skill.id == skill_id, models.Skill.employee_id == emp_id).first()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    if "proficiency_level" in payload:
+        skill.proficiency_level = payload["proficiency_level"]
+        db.commit()
+    return {"message": "Skill updated successfully"}
+
+@router.delete("/employees/{emp_id}/skills/{skill_id}")
+def delete_skill(emp_id: int, skill_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    skill = db.query(models.Skill).filter(models.Skill.id == skill_id, models.Skill.employee_id == emp_id).first()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    db.delete(skill)
+    db.commit()
+    return {"message": "Skill deleted successfully"}
+
 # --- Projects Management ---
 @router.post("/projects", response_model=schemas.ProjectResponse)
 def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):

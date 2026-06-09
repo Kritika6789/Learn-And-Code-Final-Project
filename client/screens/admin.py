@@ -297,6 +297,44 @@ def manage_skills():
                     )
                 )
                 ui.print_success("Skill added.")
+            elif choice == "2":
+                s_idx = ui.get_input("Enter Skill # : ")
+                if not s_idx.isdigit() or int(s_idx) < 1 or int(s_idx) > len(skills):
+                    ui.print_error("Invalid skill index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                s_id = skills[int(s_idx) - 1]["id"]
+                
+                print("New Level : (1) Beginner  (2) Intermediate  (3) Advanced")
+                prof_choice = ui.get_input("Enter choice: ")
+                levels = {"1": "Beginner", "2": "Intermediate", "3": "Advanced"}
+                proficiency = levels.get(prof_choice, "Beginner")
+                
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}/skills/{s_id}",
+                        json={"proficiency_level": proficiency},
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Proficiency level updated.")
+                ui.get_input("Press Enter to continue...")
+            elif choice == "3":
+                s_idx = ui.get_input("Enter Skill # to remove: ")
+                if not s_idx.isdigit() or int(s_idx) < 1 or int(s_idx) > len(skills):
+                    ui.print_error("Invalid skill index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                s_id = skills[int(s_idx) - 1]["id"]
+                
+                api.handle_response(
+                    __import__('requests').delete(
+                        f"{api.BASE_URL}/admin/employees/{emp_id}/skills/{s_id}",
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Skill removed.")
+                ui.get_input("Press Enter to continue...")
             elif choice == "4":
                 return
         except api.APIError as e:
