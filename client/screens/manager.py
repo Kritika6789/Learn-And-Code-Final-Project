@@ -158,7 +158,7 @@ def ai_allocate():
         print("\nNote: Suggestions are AI-generated. Verify before confirming.")
         ui.print_separator()
 
-        emp_id = ui.get_input("\nSelect employee (enter #, or 0 to search again): ")
+        emp_id = ui.get_input("\nSelect employee (enter ID, or 0 to search again): ")
         if emp_id and emp_id != "0":
             proj = next((p for p in projects if str(p['id']) == str(project_id)), None)
             project_name = proj['name'] if proj else f"Project {project_id}"
@@ -193,11 +193,11 @@ def direct_allocate():
 
 def perform_allocation(project_id, project_name, emp_id):
     try:
-        dash = api.get_resource_dashboard()
-        all_emps = dash.get("bench", []) + dash.get("active", [])
-        emp = next((e for e in all_emps if str(e["id"]) == str(emp_id)), None)
-        emp_name = emp['name'] if emp else f"Employee {emp_id}"
-        current_util = emp['current_utilisation'] if emp else 0
+        emp = api.handle_response(
+            __import__('requests').get(f"{api.BASE_URL}/manager/employees/{emp_id}/utilization", headers=api.get_headers())
+        )
+        emp_name = emp['name']
+        current_util = emp['current_utilisation']
         
         print(f"\n── {emp_name} ─────────────────────────────────")
         util_str = f"Current Utilisation: {current_util}%"

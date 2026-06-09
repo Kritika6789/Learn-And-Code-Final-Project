@@ -224,6 +224,19 @@ def project_details(project_id: int, db: Session = Depends(get_db), current_user
         "allocations": [{"id": a.id, "employee": a.employee.full_name, "percentage": a.utilisation_percentage, "from": a.from_date, "to": a.to_date} for a in proj.allocations if a.to_date >= today]
     }
 
+@router.get("/employees/{emp_id}/utilization")
+def get_employee_utilization(emp_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_manager(current_user)
+    emp = db.query(models.Employee).filter(models.Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    today = date.today()
+    current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+    total_util = sum(a.utilisation_percentage for a in current_allocs)
+    
+    return {"id": emp.id, "name": emp.full_name, "current_utilisation": total_util}
+
 # --- AI ---
 def get_llm_api_key(db: Session):
     config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "LLM_API_KEY").first()
@@ -260,9 +273,9 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     
     Rank the top matches based on their skills and availability.
     You MUST output a simple text table with exactly these headers:
-    #   Name           Skills Match           Availability   Recent Activity
+    ID   Name           Skills Match           Availability   Recent Activity
     
-    For each candidate, output a row matching the format. Do not add any other text before or after the table.
+    For each candidate, output a row matching the format. Under the 'ID' column, you MUST output their exact integer ID from the candidates list. Do not add any other text before or after the table.
     """
     
     if api_key and len(api_key) > 5:
