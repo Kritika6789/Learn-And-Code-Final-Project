@@ -207,6 +207,8 @@ def get_projects(db: Session = Depends(get_db), current_user: models.User = Depe
         res.append({
             "id": p.id,
             "name": p.name,
+            "description": p.description,
+            "start_date": p.start_date,
             "manager_id": p.manager_id,
             "manager_name": p.manager.full_name if p.manager else "Unknown",
             "end_date": p.end_date,
