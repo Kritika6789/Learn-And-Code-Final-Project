@@ -88,6 +88,7 @@ class MilestoneCreate(BaseModel):
     title: str
     due_date: date
     status: str
+    story_points: Optional[int] = 0
 
 class MilestoneResponse(MilestoneCreate):
     id: int

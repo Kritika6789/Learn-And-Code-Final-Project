@@ -197,10 +197,24 @@ def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)
     db.refresh(new_proj)
     return new_proj
 
-@router.get("/projects", response_model=List[schemas.ProjectResponse])
+@router.get("/projects")
 def get_projects(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
-    return db.query(models.Project).all()
+    projects = db.query(models.Project).all()
+    res = []
+    for p in projects:
+        completed_sp = sum(m.story_points for m in p.milestones if m.status == "DONE" and m.story_points)
+        res.append({
+            "id": p.id,
+            "name": p.name,
+            "manager_id": p.manager_id,
+            "manager_name": p.manager.full_name if p.manager else "Unknown",
+            "end_date": p.end_date,
+            "status": p.status,
+            "total_story_points": p.total_story_points or 0,
+            "completed_story_points": completed_sp
+        })
+    return res
 
 @router.get("/projects/{project_id}")
 def get_project_details(project_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):

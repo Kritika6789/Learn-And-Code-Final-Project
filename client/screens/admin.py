@@ -348,9 +348,18 @@ def view_all_projects():
         if not projects:
             print("No projects found.")
         else:
-            headers = ["ID", "Name", "Manager ID", "End Date", "Status"]
-            rows = [[p["id"], p["name"], p["manager_id"], p["end_date"], p["status"]] for p in projects]
-            ui.print_table(headers, rows, [6, 18, 12, 12, 10])
+            headers = ["ID", "Name", "Manager", "End Date", "Status", "SP Done/Total"]
+            rows = []
+            from datetime import datetime
+            for p in projects:
+                try:
+                    ed = datetime.strptime(p["end_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                except:
+                    ed = p["end_date"]
+                sp_done = p.get("completed_story_points", 0)
+                sp_tot = p.get("total_story_points", 0)
+                rows.append([p["id"], p["name"], p.get("manager_name", "Unknown"), ed, p["status"], f"{sp_done} / {sp_tot}"])
+            ui.print_table(headers, rows, [6, 18, 14, 12, 10, 14])
     except api.APIError as e:
         ui.print_error(e.message)
     ui.get_input("\n[B] Back > ")
@@ -430,9 +439,9 @@ def manage_milestones():
             ui.clear_screen()
             ui.print_header("MILESTONES")
             print(f"── {proj['name']} ───────────────────────────────")
-            headers = ["#", "Title", "Due Date", "Status"]
-            rows = [[i+1, m["title"], m["due_date"], m["status"]] for i, m in enumerate(milestones)]
-            ui.print_table(headers, rows, [5, 20, 12, 14])
+            headers = ["#", "Title", "Due Date", "Status", "Story Points"]
+            rows = [[i+1, m["title"], m["due_date"], m["status"], m.get("story_points", 0)] for i, m in enumerate(milestones)]
+            ui.print_table(headers, rows, [5, 20, 12, 14, 12])
 
             choice = ui.get_menu_choice([
                 "Add Milestone",
@@ -441,17 +450,20 @@ def manage_milestones():
             ])
 
             if choice == "1":
-                title = ui.get_input("Title    : ")
-                due_date = ui.get_input("Due Date : (YYYY-MM-DD) ")
-                print("Status   : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
-                st = ui.get_input("Enter choice: ")
+                title = ui.get_input("Title        : ")
+                due_date = ui.get_input("Due Date     : (DD-MM-YYYY) ")
+                sp = ui.get_input("Story Points : ")
+                print("Status       : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
+                st = ui.get_input("Enter choice : ")
                 ms_statuses = {"1": "NOT_STARTED", "2": "IN_PROGRESS", "3": "DONE"}
                 ms_status = ms_statuses.get(st, "NOT_STARTED")
+                
+                dd_parsed = "-".join(due_date.split("-")[::-1]) if "-" in due_date else due_date
 
                 api.handle_response(
                     __import__('requests').post(
                         f"{api.BASE_URL}/admin/projects/{project_id}/milestones",
-                        json={"title": title, "due_date": due_date, "status": ms_status},
+                        json={"title": title, "due_date": dd_parsed, "status": ms_status, "story_points": int(sp) if sp.isdigit() else 0},
                         headers=api.get_headers()
                     )
                 )

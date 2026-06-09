@@ -72,6 +72,7 @@ class Milestone(Base):
     title = Column(String, nullable=False)
     due_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default="NOT_STARTED") # NOT_STARTED, IN_PROGRESS, DONE
+    story_points = Column(Integer, default=0)
 
     project = relationship("Project", back_populates="milestones")
 
