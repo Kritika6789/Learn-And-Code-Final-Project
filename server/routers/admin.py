@@ -227,7 +227,8 @@ def get_project_details(project_id: int, db: Session = Depends(get_db), current_
         "name": proj.name,
         "status": proj.status,
         "end_date": proj.end_date,
-        "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status} for m in proj.milestones]
+        "total_story_points": proj.total_story_points or 0,
+        "milestones": [{"id": m.id, "title": m.title, "due_date": m.due_date, "status": m.status, "story_points": m.story_points or 0} for m in proj.milestones]
     }
 
 @router.put("/projects/{project_id}", response_model=schemas.ProjectResponse)

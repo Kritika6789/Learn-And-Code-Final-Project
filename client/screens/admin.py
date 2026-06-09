@@ -460,16 +460,38 @@ def manage_milestones():
                 ui.get_input("Press Enter to continue...")
                 return
 
-            milestones = api.handle_response(
+            proj_data = api.handle_response(
                 __import__('requests').get(f"{api.BASE_URL}/admin/projects/{project_id}", headers=api.get_headers())
-            ).get("milestones", [])
+            )
+            milestones = proj_data.get("milestones", [])
+            total_sp = proj_data.get("total_story_points", 0)
 
             ui.clear_screen()
             ui.print_header("MILESTONES")
             print(f"── {proj['name']} ───────────────────────────────")
-            headers = ["#", "Title", "Due Date", "Status", "Story Points"]
-            rows = [[i+1, m["title"], m["due_date"], m["status"], m.get("story_points", 0)] for i, m in enumerate(milestones)]
-            ui.print_table(headers, rows, [5, 20, 12, 14, 12])
+            headers = ["#", "Title", "Due Date", "Story Pts", "Status"]
+            rows = []
+            completed_sp = 0
+            from datetime import datetime
+            for i, m in enumerate(milestones):
+                try:
+                    dd = datetime.strptime(m["due_date"], "%Y-%m-%d").strftime("%d-%b-%y")
+                except:
+                    dd = m["due_date"]
+                sp = m.get("story_points", 0)
+                if m["status"] == "DONE":
+                    completed_sp += sp
+                rows.append([i+1, m["title"], dd, sp, m["status"]])
+            
+            widths = [5, 20, 13, 12, 14]
+            header_str = "".join(str(h).ljust(widths[i]) for i, h in enumerate(headers))
+            print(header_str)
+            print("─" * 56)
+            for r in rows:
+                row_str = "".join(str(cell).ljust(widths[i]) for i, cell in enumerate(r))
+                print(row_str)
+            print("─" * 56)
+            print(f"Total: {total_sp} SP   |   Completed: {completed_sp} SP   |   Remaining: {max(0, total_sp - completed_sp)} SP\n")
 
             choice = ui.get_menu_choice([
                 "Add Milestone",
@@ -478,11 +500,12 @@ def manage_milestones():
             ])
 
             if choice == "1":
-                title = ui.get_input("Title        : ")
-                due_date = ui.get_input("Due Date     : (DD-MM-YYYY) ")
-                sp = ui.get_input("Story Points : ")
-                print("Status       : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
-                st = ui.get_input("Enter choice : ")
+                print("Add Milestone sub-prompt:\n")
+                title = ui.get_input("Milestone Title  : ")
+                due_date = ui.get_input("Due Date         : (DD-MM-YYYY) ")
+                sp = ui.get_input("Story Points     : ")
+                print("Status           : (1) NOT_STARTED  (2) IN_PROGRESS  (3) DONE")
+                st = ui.get_input("Enter choice     : ")
                 ms_statuses = {"1": "NOT_STARTED", "2": "IN_PROGRESS", "3": "DONE"}
                 ms_status = ms_statuses.get(st, "NOT_STARTED")
                 
@@ -496,6 +519,29 @@ def manage_milestones():
                     )
                 )
                 ui.print_success("Milestone added.")
+                ui.get_input("Press Enter to continue...")
+            elif choice == "2":
+                print("Update Milestone Status sub-prompt:\n")
+                m_idx = ui.get_input("Enter Milestone # : ")
+                if not m_idx.isdigit() or int(m_idx) < 1 or int(m_idx) > len(milestones):
+                    ui.print_error("Invalid milestone index")
+                    ui.get_input("Press Enter to continue...")
+                    continue
+                m_id = milestones[int(m_idx) - 1]["id"]
+                
+                print("New Status        : (1) NOT_STARTED   (2) IN_PROGRESS   (3) DONE")
+                st = ui.get_input("Enter choice      : ")
+                ms_statuses = {"1": "NOT_STARTED", "2": "IN_PROGRESS", "3": "DONE"}
+                ms_status = ms_statuses.get(st, "NOT_STARTED")
+                
+                api.handle_response(
+                    __import__('requests').put(
+                        f"{api.BASE_URL}/admin/projects/{project_id}/milestones/{m_id}",
+                        json={"status": ms_status},
+                        headers=api.get_headers()
+                    )
+                )
+                ui.print_success("Milestone updated.")
                 ui.get_input("Press Enter to continue...")
             elif choice == "3":
                 return
