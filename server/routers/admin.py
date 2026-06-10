@@ -363,7 +363,16 @@ def update_config(key: str, value: str, db: Session = Depends(get_db), current_u
     db.commit()
     return {"message": f"Updated {key}"}
 
-@router.get("/allocations", response_model=List[schemas.AllocationResponse])
+@router.get("/allocations")
 def get_all_allocations(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
-    return db.query(models.Allocation).all()
+    allocs = db.query(models.Allocation).all()
+    return [{
+        "employee_id": a.employee_id,
+        "employee_name": a.employee.full_name,
+        "project_id": a.project_id,
+        "project_name": a.project.name,
+        "utilisation_percentage": a.utilisation_percentage,
+        "from_date": a.from_date,
+        "to_date": a.to_date
+    } for a in allocs]
