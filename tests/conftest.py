@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from server.main import app
 from server.database import Base, get_db
+from server.dependencies import get_read_only_db
 from server import models
 from server.auth import get_password_hash
 from server.dependencies import get_current_active_user
@@ -109,6 +110,7 @@ def client_admin(db):
     def override_get_db():
         yield db
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_only_db] = override_get_db
     c = TestClient(app)
     response = c.post("/api/auth/login", data={"username": "admin", "password": "password"})
     token = response.json()["access_token"]
@@ -121,6 +123,7 @@ def client_manager(db):
     def override_get_db():
         yield db
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_only_db] = override_get_db
     c = TestClient(app)
     response = c.post("/api/auth/login", data={"username": "manager", "password": "password"})
     token = response.json()["access_token"]
@@ -133,6 +136,7 @@ def client_employee(db):
     def override_get_db():
         yield db
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_only_db] = override_get_db
     c = TestClient(app)
     response = c.post("/api/auth/login", data={"username": "employee", "password": "password"})
     token = response.json()["access_token"]

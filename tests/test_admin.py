@@ -71,3 +71,38 @@ def test_deactivate_employee_ends_allocations(client_admin, client_manager, db):
     alloc = db.query(models.Allocation).filter(models.Allocation.employee_id == 1).first()
     # Should be set to yesterday, we just check it is not 2026-12-31
     assert str(alloc.to_date) != "2026-12-31"
+
+def test_assign_skills(client_admin, db):
+    # Get first employee
+    res = client_admin.get("/api/admin/employees")
+    emp_id = res.json()[0]["id"]
+    
+    # Assign skill
+    payload = {"name": "Python", "category": "Programming", "proficiency_level": "Expert"}
+    skill_res = client_admin.post(f"/api/admin/employees/{emp_id}/skills", json=payload)
+    assert skill_res.status_code == 200
+    
+    get_res = client_admin.get(f"/api/admin/employees/{emp_id}/skills")
+    skills = get_res.json()
+    assert len(skills) > 0
+    assert any(s["name"] == "Python" for s in skills)
+
+def test_view_company_allocation_matrix(client_admin):
+    res = client_admin.get("/api/admin/allocations")
+    assert res.status_code == 200
+    assert type(res.json()) is list
+
+def test_configure_system_settings(client_admin):
+    # Get config
+    res = client_admin.get("/api/admin/config")
+    assert res.status_code == 200
+    
+    # Update config
+    update_res = client_admin.put("/api/admin/config/LLM_API_KEY?value=test_key_123")
+    assert update_res.status_code == 200
+
+def test_reset_password(client_admin, db):
+    # Reset admin's own password for test
+    res = client_admin.put("/api/admin/users/1/reset-password?temp_password=NewPassword123!")
+    assert res.status_code == 200
+    assert "Password reset for admin" in res.json()["message"]

@@ -79,3 +79,27 @@ def test_monday_constraint(client_admin, client_manager, client_employee, db):
     response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 400
     assert "must be a monday" in response.json()["detail"].lower()
+
+def test_view_allocation_history(client_employee):
+    res = client_employee.get("/api/employee/allocations")
+    assert res.status_code == 200
+    assert type(res.json()) is list
+
+def test_view_timesheet_history(client_admin, client_manager, client_employee, db):
+    # Setup alloc & submit a timesheet first to ensure it appears
+    project_id = setup_project_and_allocation(client_admin, client_manager, db)
+    
+    ts_req = {
+        "project_id": project_id,
+        "hours_logged": 10,
+        "week_start_date": "2026-06-01",
+        "activity_tags": "Testing"
+    }
+    client_employee.post("/api/employee/timesheets", json=ts_req)
+    
+    # View history
+    res = client_employee.get("/api/employee/timesheets")
+    assert res.status_code == 200
+    history = res.json()
+    assert len(history) >= 1
+    assert any(t["hours"] == 10 for t in history)

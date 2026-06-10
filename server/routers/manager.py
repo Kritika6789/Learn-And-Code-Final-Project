@@ -313,23 +313,9 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
     """
     
     api_key = get_llm_api_key(db)
-    if api_key and len(api_key) > 5:
-        try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                'gemini-2.5-flash'
-            )
-            response = model.generate_content(prompt)
-            return {"summary": response.text}
-        except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
-                clean_err = "API Quota Exceeded (429)."
-            else:
-                clean_err = "An unexpected error occurred."
-            return {"summary": f"AI Error: {clean_err}\n\nMock: The project looks on track but verify milestone deadlines."}
-    else:
-        return {"summary": "LLM_API_KEY is not configured. \n\nMock: The project looks on track but verify milestone deadlines."}
+    matcher = GeminiMatchingStrategy()
+    summary = matcher.generate_risk_summary(prompt, api_key)
+    return {"summary": summary}
 
 @router.get("/timesheets")
 def view_team_timesheets(week: Optional[date] = None, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
