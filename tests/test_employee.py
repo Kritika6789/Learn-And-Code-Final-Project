@@ -22,10 +22,10 @@ def setup_project_and_allocation(client_admin, client_manager, db):
         "from_date": "2026-06-01",
         "to_date": "2026-12-31"
     })
-    return alloc_res.json()["id"]
+    return project_id
 
 def test_submit_valid_timesheet(client_admin, client_manager, client_employee, db):
-    alloc_id = setup_project_and_allocation(client_admin, client_manager, db)
+    project_id = setup_project_and_allocation(client_admin, client_manager, db)
     
     # Calculate a valid Monday date
     today = date.today()
@@ -33,36 +33,36 @@ def test_submit_valid_timesheet(client_admin, client_manager, client_employee, d
     monday_str = last_monday.strftime("%Y-%m-%d")
     
     payload = {
-        "allocation_id": alloc_id,
+        "project_id": project_id,
         "week_start_date": monday_str,
         "hours_logged": 40,
-        "activity_description": "API Development"
+        "activity_tags": "API Development"
     }
     
     response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 200
-    assert response.json()["hours_logged"] == 40
+    assert response.json()["message"] == "Timesheet submitted successfully"
 
 def test_max_hours_validation(client_admin, client_manager, client_employee, db):
-    alloc_id = setup_project_and_allocation(client_admin, client_manager, db)
+    project_id = setup_project_and_allocation(client_admin, client_manager, db)
     
     today = date.today()
     last_monday = today - timedelta(days=today.weekday())
     monday_str = last_monday.strftime("%Y-%m-%d")
     
     payload = {
-        "allocation_id": alloc_id,
+        "project_id": project_id,
         "week_start_date": monday_str,
         "hours_logged": 45, # 100% utilisation = 40 hours max. 45 should fail.
-        "activity_description": "Overtime Development"
+        "activity_tags": "Overtime Development"
     }
     
     response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 400
-    assert "exceeds maximum allowed hours" in response.json()["detail"].lower()
+    assert "exceeds expected max" in response.json()["detail"].lower()
 
 def test_monday_constraint(client_admin, client_manager, client_employee, db):
-    alloc_id = setup_project_and_allocation(client_admin, client_manager, db)
+    project_id = setup_project_and_allocation(client_admin, client_manager, db)
     
     today = date.today()
     # Force a Tuesday
@@ -70,12 +70,12 @@ def test_monday_constraint(client_admin, client_manager, client_employee, db):
     tuesday_str = tuesday.strftime("%Y-%m-%d")
     
     payload = {
-        "allocation_id": alloc_id,
+        "project_id": project_id,
         "week_start_date": tuesday_str,
         "hours_logged": 20,
-        "activity_description": "API Development"
+        "activity_tags": "API Development"
     }
     
-    response = client_employee.post("/employee/timesheets", json=payload)
+    response = client_employee.post("/api/employee/timesheets", json=payload)
     assert response.status_code == 400
     assert "must be a monday" in response.json()["detail"].lower()

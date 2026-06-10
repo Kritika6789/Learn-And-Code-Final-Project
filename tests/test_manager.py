@@ -29,7 +29,7 @@ def test_allocation_bounds(client_admin, client_manager, db):
     }
     response = client_manager.post("/api/manager/allocations", json=payload)
     assert response.status_code == 400
-    assert "cannot be outside project dates" in response.json()["detail"]
+    assert "must be within project dates" in response.json()["detail"]
 
 def test_allocation_limits(client_admin, client_manager, db):
     project_id = setup_project_and_employee(client_admin, db)
@@ -44,18 +44,19 @@ def test_allocation_limits(client_admin, client_manager, db):
     }
     response = client_manager.post("/api/manager/allocations", json=payload)
     assert response.status_code == 400
-    assert "Utilization exceeds 100%" in response.json()["detail"]
+    assert "Employee cannot be allocated more than 100%" in response.json()["detail"]
 
 @patch("server.routers.manager.genai.GenerativeModel")
-def test_ai_skill_matching(mock_genai, client_manager, db):
+def test_ai_skill_matching(mock_genai, client_admin, client_manager, db):
+    project_id = setup_project_and_employee(client_admin, db)
     # Mock the Gemini API response
     mock_instance = mock_genai.return_value
     mock_response = type("MockResponse", (), {"text": "1, Employee User, 85%, Java, High"})
     mock_instance.generate_content.return_value = mock_response
 
-    response = client_manager.post("/api/manager/ai/match-skills", json={"requirement": "Java skills"})
+    response = client_manager.post("/api/manager/ai/search", json={"project_id": project_id, "requirement": "Java skills"})
     assert response.status_code == 200
     # The endpoint parses the raw text and returns a list of dictionaries if successful
     # Depending on how the frontend parses it, it might just return the raw text.
     # In our implementation, it returns {"matches": result.text}
-    assert "Employee User" in response.json()["matches"]
+    assert "Employee User" in response.json()["results"]

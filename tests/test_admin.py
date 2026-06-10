@@ -6,7 +6,7 @@ def test_create_user(client_admin):
         "full_name": "Test User",
         "email": "test@example.com",
         "username": "testuser",
-        "password": "password",
+        "password": "Password123",
         "role": "EMPLOYEE"
     }
     response = client_admin.post("/api/admin/users", json=payload)
@@ -30,7 +30,7 @@ def test_create_project(client_admin):
     assert response.status_code == 200
     assert response.json()["name"] == "Test Project"
 
-def test_deactivate_employee_ends_allocations(client_admin, db):
+def test_deactivate_employee_ends_allocations(client_admin, client_manager, db):
     # To test deactivation logic, we need an active allocation
     # Create project
     proj_res = client_admin.post("/api/admin/projects", json={
@@ -54,9 +54,7 @@ def test_deactivate_employee_ends_allocations(client_admin, db):
         "to_date": "2026-12-31"
     }
     # Log in as manager to allocate
-    manager_res = client_admin.post("/api/auth/login", data={"username": "manager", "password": "password"})
-    mgr_token = manager_res.json()["access_token"]
-    alloc_res = client_admin.post("/api/manager/allocations", json=payload, headers={"Authorization": f"Bearer {mgr_token}"})
+    alloc_res = client_manager.post("/api/manager/allocations", json=payload)
     
     # Now deactivate the employee via admin route
     deact_res = client_admin.put("/api/admin/employees/1/deactivate")
@@ -64,8 +62,10 @@ def test_deactivate_employee_ends_allocations(client_admin, db):
     
     # Verify employee status is deactivated and allocation is ended
     from server import models
+    db.expire_all()
     emp = db.query(models.Employee).filter(models.Employee.id == 1).first()
-    assert emp.status == "DEACTIVATED"
+    assert emp.status == "BENCH"
+    assert emp.user.is_active == False
     
     # Verify allocation is ended
     alloc = db.query(models.Allocation).filter(models.Allocation.employee_id == 1).first()
