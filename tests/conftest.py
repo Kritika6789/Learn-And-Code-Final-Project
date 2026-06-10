@@ -105,22 +105,37 @@ def auth_headers():
     return _auth_headers
 
 @pytest.fixture(scope="function")
-def client_admin(client):
-    response = client.post("/api/auth/login", data={"username": "admin", "password": "password"})
+def client_admin(db):
+    def override_get_db():
+        yield db
+    app.dependency_overrides[get_db] = override_get_db
+    c = TestClient(app)
+    response = c.post("/api/auth/login", data={"username": "admin", "password": "password"})
     token = response.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-    return client
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    yield c
+    app.dependency_overrides.clear()
 
 @pytest.fixture(scope="function")
-def client_manager(client):
-    response = client.post("/api/auth/login", data={"username": "manager", "password": "password"})
+def client_manager(db):
+    def override_get_db():
+        yield db
+    app.dependency_overrides[get_db] = override_get_db
+    c = TestClient(app)
+    response = c.post("/api/auth/login", data={"username": "manager", "password": "password"})
     token = response.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-    return client
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    yield c
+    app.dependency_overrides.clear()
 
 @pytest.fixture(scope="function")
-def client_employee(client):
-    response = client.post("/api/auth/login", data={"username": "employee", "password": "password"})
+def client_employee(db):
+    def override_get_db():
+        yield db
+    app.dependency_overrides[get_db] = override_get_db
+    c = TestClient(app)
+    response = c.post("/api/auth/login", data={"username": "employee", "password": "password"})
     token = response.json()["access_token"]
-    client.headers.update({"Authorization": f"Bearer {token}"})
-    return client
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    yield c
+    app.dependency_overrides.clear()
