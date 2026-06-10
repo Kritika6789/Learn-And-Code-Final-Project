@@ -8,7 +8,9 @@ from pydantic import BaseModel
 from server import models, schemas, auth
 from server.database import get_db
 from server.dependencies import get_current_active_user, get_read_only_db
-import google.generativeai as genai
+import importlib
+from server.services.ai_matcher import GeminiMatchingStrategy
+from server.config import MAX_UTILIZATION_PERCENTAGE
 
 router = APIRouter(
     prefix="/api/manager",
@@ -80,8 +82,8 @@ def create_allocation(alloc: AllocationCreateReq, db: Session = Depends(get_db),
     ).all()
     
     total_util = sum(a.utilisation_percentage for a in overlapping) + alloc.utilisation_percentage
-    if total_util > 100:
-        raise HTTPException(status_code=400, detail=f"Employee cannot be allocated more than 100% in this period. Overlapping util will be {total_util}%")
+    if total_util > MAX_UTILIZATION_PERCENTAGE:
+        raise HTTPException(status_code=400, detail=f"Employee cannot be allocated more than {MAX_UTILIZATION_PERCENTAGE}% in this period. Overlapping util will be {total_util}%")
         
     if alloc.from_date < proj.start_date or alloc.to_date > proj.end_date:
         raise HTTPException(status_code=400, detail=f"Allocation dates ({alloc.from_date} to {alloc.to_date}) must be within project dates ({proj.start_date} to {proj.end_date}).")
@@ -248,14 +250,18 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     check_manager(current_user)
     api_key = get_llm_api_key(db)
     
-    employees = db.query(models.Employee).all()
+    # Example of Repository pattern (SRP & DIP)
+    from server.repositories.employee import EmployeeRepository
+    emp_repo = EmployeeRepository(db)
+    employees = emp_repo.get_all()
+    
     candidates = []
     
     today = date.today()
     for emp in employees:
         current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
         total_util = sum(a.utilisation_percentage for a in current_allocs)
-        free_capacity = 100 - total_util
+        free_capacity = MAX_UTILIZATION_PERCENTAGE - total_util
         if free_capacity > 0:
             skills = ", ".join([s.name for s in emp.skills])
             recent_tags = ", ".join([t.activity_tags for t in emp.timesheets[-4:]]) if emp.timesheets else "None"
@@ -279,23 +285,10 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     For each candidate, output a row matching the format. Under the 'ID' column, you MUST output their exact integer ID from the candidates list. Do not add any other text before or after the table.
     """
     
-    if api_key and len(api_key) > 5:
-        try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                'gemini-2.5-flash'
-            )
-            response = model.generate_content(prompt)
-            return {"results": response.text}
-        except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
-                clean_err = "API Quota Exceeded (429). Please try again later or check billing."
-            else:
-                clean_err = "An unexpected error occurred while calling the Gemini API."
-            return {"results": f"AI Error: {clean_err}\n\n(Mocked Results: Priya Sharma is a good match.)"}
-    else:
-        return {"results": "LLM_API_KEY is not configured in System Configuration. \n\nMocked Results: \n1. Priya Sharma - Good match based on skills."}
+    # Use the Strategy Pattern (OCP & SRP)
+    matcher = GeminiMatchingStrategy()
+    result = matcher.match_skills(prompt, api_key)
+    return {"results": result}
 
 @router.get("/ai/risk-summary/{project_id}")
 def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), current_user: models.User = Depends(get_current_active_user)):

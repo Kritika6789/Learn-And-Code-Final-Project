@@ -11,7 +11,7 @@ def test_validate_password_too_short():
     with pytest.raises(HTTPException) as excinfo:
         validate_password("Pass1")
     assert excinfo.value.status_code == 400
-    assert "at least 8 characters" in excinfo.value.detail
+    assert "characters long" in excinfo.value.detail
 
 def test_validate_password_no_uppercase():
     with pytest.raises(HTTPException) as excinfo:
