@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import google.generativeai as genai
+from server.services.llm_factory import ILLMProvider
 
 class IAIMatcher(ABC):
     """
@@ -9,23 +9,19 @@ class IAIMatcher(ABC):
     def match_skills(self, prompt: str, api_key: str) -> str:
         pass
 
-class GeminiMatchingStrategy(IAIMatcher):
+class GenericMatchingStrategy(IAIMatcher):
     """
-    Concrete strategy using Google's Gemini API.
+    Concrete strategy using an injected ILLMProvider.
     """
+    def __init__(self, provider: ILLMProvider):
+        self.provider = provider
+
     def match_skills(self, prompt: str, api_key: str) -> str:
         if not api_key or len(api_key) < 5:
             return "AI Error: Invalid API Key\n\n(Mocked Results: Priya Sharma is a good match.)"
             
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(prompt)
-            return response.text
+            return self.provider.generate_content(prompt, api_key)
         except Exception as e:
             error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
-                clean_err = "API Quota Exceeded (429). Please try again later or check billing."
-            else:
-                clean_err = "An unexpected error occurred while calling the Gemini API."
-            return f"AI Error: {clean_err}\n\n(Mocked Results: Priya Sharma is a good match.)"
+            return f"AI Error: {error_msg}\n\n(Mocked Results: Priya Sharma is a good match.)"
