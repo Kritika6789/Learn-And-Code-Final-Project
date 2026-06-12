@@ -61,7 +61,7 @@ def submit_timesheet(user):
     print(f"Employee  : {user['full_name']}")
 
     while True:
-        week_input = ui.get_input("Week Start: Enter date (YYYY-MM-DD) or press Enter for last Monday\n          > ")
+        week_input = ui.get_input("Week Start: Enter Monday date (YYYY-MM-DD) or press Enter for last Monday\n          > ")
         if not week_input:
             today = date.today()
             last_monday = today - timedelta(days=today.weekday())
@@ -72,7 +72,10 @@ def submit_timesheet(user):
         else:
             try:
                 from datetime import datetime
-                datetime.strptime(week_input, "%Y-%m-%d")
+                dt = datetime.strptime(week_input, "%Y-%m-%d")
+                if dt.weekday() != 0:
+                    ui.print_error("The date must be a Monday. Please try again.")
+                    continue
                 break
             except ValueError:
                 ui.print_error("Invalid date format. Please use YYYY-MM-DD.")
@@ -119,7 +122,7 @@ def submit_timesheet(user):
 
             entries.append({
                 "project": alloc["project"],
-                "project_id": None,
+                "project_id": alloc["project_id"],
                 "hours": int(hours),
                 "tags": selected_tags
             })
