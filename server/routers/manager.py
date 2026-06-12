@@ -9,7 +9,8 @@ from server import models, schemas, auth
 from server.database import get_db
 from server.dependencies import get_current_active_user, get_read_only_db
 import importlib
-from server.services.ai_matcher import GeminiMatchingStrategy
+from server.services.ai_matcher import GenericMatchingStrategy
+from server.services.llm_factory import LLMFactory
 from server.config import MAX_UTILIZATION_PERCENTAGE
 
 router = APIRouter(
@@ -33,6 +34,34 @@ class AISearchReq(BaseModel):
     project_id: int
     requirement: str
 
+class RoleDefinition(BaseModel):
+    title: str
+    requirement: str
+
+class AITeamSearchReq(BaseModel):
+    project_id: int
+    team_requirement: str
+
+# --- Employee Management ---
+@router.post("/employees/{employee_id}/unfreeze")
+def unfreeze_employee(employee_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_manager(current_user)
+    
+    emp = db.query(models.Employee).filter(
+        models.Employee.id == employee_id,
+        models.Employee.manager_id == current_user.id
+    ).first()
+    
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found or not in your team.")
+        
+    emp.timesheet_frozen = False
+    if hasattr(emp, "missing_timesheet_reminders"):
+        emp.missing_timesheet_reminders = 0
+        
+    db.commit()
+    return {"message": f"Successfully unfrozen timesheet access for {emp.full_name}."}
+
 # --- Resource Dashboard ---
 @router.get("/dashboard")
 def get_dashboard(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -52,7 +81,8 @@ def get_dashboard(db: Session = Depends(get_db), current_user: models.User = Dep
             "name": emp.full_name,
             "department": emp.department,
             "skills": [s.name for s in emp.skills],
-            "current_utilisation": total_util
+            "current_utilisation": total_util,
+            "timesheet_frozen": getattr(emp, "timesheet_frozen", False)
         }
         
         if total_util == 0:
@@ -74,6 +104,9 @@ def create_allocation(alloc: AllocationCreateReq, db: Session = Depends(get_db),
     emp = db.query(models.Employee).filter(models.Employee.id == alloc.employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+        
+    if emp.manager_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only allocate your own team members.")
         
     overlapping = db.query(models.Allocation).filter(
         models.Allocation.employee_id == alloc.employee_id,
@@ -121,6 +154,9 @@ def end_allocation(alloc_id: int, db: Session = Depends(get_db), current_user: m
         
     if alloc.project.manager_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this project's allocations")
+        
+    if alloc.employee.manager_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only end allocations for your own team members.")
         
     from datetime import timedelta
     alloc.to_date = date.today() - timedelta(days=1)
@@ -173,10 +209,18 @@ def my_projects(db: Session = Depends(get_db), current_user: models.User = Depen
     for p in projects:
         health = "🟢 ON TRACK"
         today = date.today()
+        
+        # Check active allocations
+        active_allocs = [a for a in p.allocations if a.to_date >= today]
+        if not active_allocs:
+            health = "🔴 AT RISK"
+            
+        # Check overdue milestones
         for m in p.milestones:
             if m.status != "DONE" and m.due_date < today:
                 health = "🔴 AT RISK"
                 break
+                
         if health == "🟢 ON TRACK" and p.end_date < today and p.status != "COMPLETED":
              health = "🟡 ATTENTION"
         
@@ -206,11 +250,17 @@ def project_details(project_id: int, db: Session = Depends(get_db), current_user
             risk_flags.append(f"✗ {m.title} milestone is overdue")
             
     if not proj.allocations:
+        health = "🔴 AT RISK"
         risk_flags.append("✗ No resources allocated")
     else:
-        risk_flags.append("✓ Resources are allocated")
+        active = [a for a in proj.allocations if a.to_date >= today]
+        if not active:
+            health = "🔴 AT RISK"
+            risk_flags.append("✗ All resources have been de-allocated")
+        else:
+            risk_flags.append("✓ Resources are allocated")
         
-    if not risk_flags:
+    if not [f for f in risk_flags if "✗" in f]:
          risk_flags.append("✓ All milestones on track")
          
     if health == "🟢 ON TRACK" and proj.end_date < today and proj.status != "COMPLETED":
@@ -243,6 +293,14 @@ def get_employee_utilization(emp_id: int, db: Session = Depends(get_db), current
 # --- AI ---
 def get_llm_api_key(db: Session):
     config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "LLM_API_KEY").first()
+    return config.value if config else None
+
+def get_llm_provider_name(db: Session):
+    config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "LLM_PROVIDER").first()
+    return config.value if config else "gemini"
+
+def get_llm_host_url(db: Session):
+    config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "LLM_HOST").first()
     return config.value if config else None
 
 @router.post("/ai/search")
@@ -280,13 +338,91 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     
     Rank the top matches based on their skills and availability.
     You MUST output a simple text table with exactly these headers:
-    ID   Name           Skills Match           Availability   Recent Activity
+    ID   Name           Skills Match           Availability   Reason
     
-    For each candidate, output a row matching the format. Under the 'ID' column, you MUST output their exact integer ID from the candidates list. Do not add any other text before or after the table.
+    For each candidate, output a row matching the format. Under the 'ID' column, you MUST output their exact integer ID from the candidates list. In the 'Reason' column, explicitly state why they are a good fit. Do not add any other text before or after the table.
     """
     
     # Use the Strategy Pattern (OCP & SRP)
-    matcher = GeminiMatchingStrategy()
+    provider_name = get_llm_provider_name(db)
+    host_url = get_llm_host_url(db)
+    try:
+        provider = LLMFactory.get_provider(provider_name, host_url=host_url)
+    except ValueError as e:
+        return {"results": f"AI Error: {str(e)}"}
+        
+    matcher = GenericMatchingStrategy(provider)
+    result = matcher.match_skills(prompt, api_key)
+    return {"results": result}
+
+@router.post("/ai/team-search")
+def ai_team_search(req: AITeamSearchReq, db: Session = Depends(get_read_only_db), current_user: models.User = Depends(get_current_active_user)):
+    check_manager(current_user)
+    
+    employees = db.query(models.Employee).all()
+    candidates = []
+    today = date.today()
+    for emp in employees:
+        current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+        total_util = sum(a.utilisation_percentage for a in current_allocs)
+        free_capacity = MAX_UTILIZATION_PERCENTAGE - total_util
+        skills = ", ".join([s.name for s in emp.skills])
+        
+        status = f"Available ({free_capacity}% free)" if free_capacity > 0 else "Fully Allocated"
+        if free_capacity == 0 and current_allocs:
+            max_to_date = max(a.to_date for a in current_allocs)
+            status += f" until {max_to_date}"
+            
+        candidates.append(f"ID {emp.id}: {emp.full_name}. Skills: {skills}. Status: {status}")
+
+    candidates_text = "\n".join(candidates)
+    
+    prompt = f"""
+    The manager needs to staff a whole team based on this requirement:
+    "{req.team_requirement}"
+    
+    Here is the global pool of employees:
+    {candidates_text}
+    
+    Your task: Parse the requirement to identify all the separate roles needed (e.g. if they ask for "2 backend devs", you must create Role 1: Backend Dev, Role 2: Backend Dev). Then find the best matching employee for each role.
+    
+    You MUST output a clean, spaced-out text list format. DO NOT use markdown tables (no '|' or '---' characters).
+    
+    Rules:
+    1. Do not assign the same person to more than one role. An employee can only be assigned if they are "Available".
+    2. STRICT MATCHING: Do NOT assign an employee unless their skills strongly match the role's requirements. If no employee has the required skills, you MUST leave it unassigned.
+    3. GLOBALLY OPTIMIZE: If an employee is qualified for multiple roles, assign them to the role that best utilizes their strongest skills to maximize the overall team quality.
+    4. If the role is filled: briefly explain why they are a good match based on their specific skills.
+    5. If the role CANNOT be filled (due to missing skills or unavailability), you MUST use one of these two exact phrases for the Reason:
+       - "Gap: Nobody has the skill (so hire or train)."
+       - "Gap: Someone has it but is allocated elsewhere until [Date] (so plan around their availability)."
+       
+    Example Output Format:
+    Role: Senior Java Dev
+    Assigned: ID 1: Priya Sharma
+    Reason: Has Advanced Java skills and is 100% free.
+    
+    Role: DevOps Engineer
+    Assigned: None
+    Reason: Gap: Nobody has the skill (so hire or train).
+    
+    Role: QA Tester
+    Assigned: None
+    Reason: Gap: Someone has it but is allocated elsewhere until 2026-08-01 (so plan around their availability).
+       
+    Output ONLY this exact text structure. Do not add any other text before or after. Do not output JSON.
+    """
+    
+    api_key = get_llm_api_key(db)
+    provider_name = get_llm_provider_name(db)
+    host_url = get_llm_host_url(db)
+    
+    try:
+        provider = LLMFactory.get_provider(provider_name, host_url=host_url)
+    except ValueError as e:
+        return {"results": f"AI Error: {str(e)}"}
+        
+    matcher = GenericMatchingStrategy(provider)
     result = matcher.match_skills(prompt, api_key)
     return {"results": result}
 
@@ -300,6 +436,9 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
     milestones = "\n".join([f"- {m.title} (Due: {m.due_date}, Status: {m.status})" for m in proj.milestones])
     allocations = "\n".join([f"- {a.employee.full_name} ({a.utilisation_percentage}%)" for a in proj.allocations])
     
+    timesheets = db.query(models.Timesheet).filter(models.Timesheet.project_id == project_id).all()
+    timesheet_summary = "\n".join([f"- {t.employee.full_name}: {t.hours_worked} hrs, tags: {t.activity_tags}" for t in timesheets[-10:]])
+    
     prompt = f"""
     Analyze the risk for project '{proj.name}' ending on {proj.end_date}.
     
@@ -309,25 +448,22 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
     Allocations:
     {allocations}
     
-    Write a brief, plain-English paragraph summarizing any risks (e.g., overdue milestones, lack of resources). Do not dump raw data.
+    Recent Timesheets:
+    {timesheet_summary if timesheet_summary else "No timesheets submitted yet."}
+    
+    Write a brief, plain-English paragraph summarizing any risks (e.g., overdue milestones, lack of resources, lack of timesheet activity). Do not dump raw data.
     """
     
     api_key = get_llm_api_key(db)
+    provider_name = get_llm_provider_name(db)
+    host_url = get_llm_host_url(db)
     if api_key and len(api_key) > 5:
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                'gemini-2.5-flash'
-            )
-            response = model.generate_content(prompt)
-            return {"summary": response.text}
+            provider = LLMFactory.get_provider(provider_name, host_url=host_url)
+            response_text = provider.generate_content(prompt, api_key)
+            return {"summary": response_text}
         except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower() or "exhausted" in error_msg.lower():
-                clean_err = "API Quota Exceeded (429)."
-            else:
-                clean_err = "An unexpected error occurred."
-            return {"summary": f"AI Error: {clean_err}\n\nMock: The project looks on track but verify milestone deadlines."}
+            return {"summary": f"AI Error: {str(e)}\n\nMock: The project looks on track but verify milestone deadlines."}
     else:
         return {"summary": "LLM_API_KEY is not configured. \n\nMock: The project looks on track but verify milestone deadlines."}
 
