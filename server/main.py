@@ -17,7 +17,11 @@ app.include_router(employee.router)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
-    msg = ", ".join([f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}" for err in errors])
+    simplified_msgs = []
+    for err in errors:
+        loc = err.get("loc", ["unknown"])[-1]
+        simplified_msgs.append(f"Invalid input format for '{loc}'")
+    msg = ", ".join(simplified_msgs)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": f"Validation Error: {msg}"},
