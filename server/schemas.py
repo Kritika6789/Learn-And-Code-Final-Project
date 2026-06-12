@@ -15,6 +15,8 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     force_password_change: bool
+    department: Optional[str] = None
+    designation: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -86,6 +88,14 @@ class ProjectResponse(ProjectCreate):
 
     class Config:
         from_attributes = True
+
+class RoleDefinition(BaseModel):
+    title: str
+    requirement: str
+
+class AITeamSearchReq(BaseModel):
+    project_id: int
+    team_requirement: str
 
 # --- Milestone Schemas ---
 class MilestoneCreate(BaseModel):

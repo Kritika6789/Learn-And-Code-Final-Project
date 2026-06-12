@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
+from pydantic import BaseModel
 
 from server import models, schemas, auth
 from server.database import get_db
@@ -17,6 +18,26 @@ def check_admin(user: models.User):
     if user.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Not authorized. Admin role required.")
 
+class DemoTriggerReq(BaseModel):
+    day_index: int
+
+@router.post("/demo/trigger-compliance")
+def trigger_demo_compliance(req: DemoTriggerReq, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    check_admin(current_user)
+    
+    from server.services.email_service import EmailService
+    from datetime import date, timedelta
+    
+    weekday = req.day_index
+    if weekday not in [0, 1, 2]:
+        raise HTTPException(status_code=400, detail="day_index must be 0 (Mon), 1 (Tue), or 2 (Wed)")
+        
+    from server.timesheet_scheduler import timesheet_compliance_check
+    timesheet_compliance_check()
+    return {"message": "Stateful Timesheet Compliance Check triggered! Check server console for emails."}
+    
+
+
 # --- Users Management ---
 @router.post("/users", response_model=schemas.UserResponse)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -31,6 +52,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
         username=user.username,
         email=user.email,
         full_name=user.full_name,
+        department="Unassigned",
+        designation="Unassigned",
         role=user.role,
         password_hash=hashed_pw,
         is_active=True,
@@ -43,10 +66,6 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), current
     if new_user.role in ["EMPLOYEE", "MANAGER"]:
         emp = models.Employee(
             user_id=new_user.id,
-            full_name=new_user.full_name,
-            email=new_user.email,
-            department="Unassigned",
-            designation="Unassigned",
             status="BENCH"
         )
         db.add(emp)
@@ -106,12 +125,13 @@ def add_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db), cur
     if user.employee:
         raise HTTPException(status_code=400, detail="User already has an employee profile")
 
+    user.department = emp.department
+    user.designation = emp.designation
+    user.full_name = emp.full_name
+    user.email = emp.email
+
     new_emp = models.Employee(
         user_id=emp.user_id,
-        full_name=emp.full_name,
-        email=emp.email,
-        department=emp.department,
-        designation=emp.designation,
         status="BENCH"
     )
     db.add(new_emp)
@@ -122,7 +142,7 @@ def add_employee(emp: schemas.EmployeeCreate, db: Session = Depends(get_db), cur
 @router.get("/employees", response_model=List[schemas.EmployeeResponse])
 def get_employees(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     check_admin(current_user)
-    return db.query(models.Employee).all()
+    return db.query(models.Employee).join(models.User, models.Employee.user_id == models.User.id).filter(models.User.role == "EMPLOYEE").all()
 
 @router.get("/employees/{employee_id}")
 def get_employee_details(employee_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
@@ -130,6 +150,9 @@ def get_employee_details(employee_id: int, db: Session = Depends(get_db), curren
     emp = db.query(models.Employee).filter(models.Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+        
+    if emp.user and emp.user.role != "EMPLOYEE":
+        raise HTTPException(status_code=400, detail="Cannot access non-employee profiles here. Use Manage Users instead.")
         
     today = date.today()
     active_allocs = []
@@ -159,7 +182,11 @@ def update_employee(employee_id: int, employee_update: schemas.EmployeeUpdate, d
         
     update_data = employee_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(emp, key, value)
+        if key in ["department", "designation"]:
+            if emp.user:
+                setattr(emp.user, key, value)
+        else:
+            setattr(emp, key, value)
         
     db.commit()
     db.refresh(emp)
@@ -171,6 +198,9 @@ def deactivate_employee(emp_id: int, db: Session = Depends(get_db), current_user
     emp = db.query(models.Employee).filter(models.Employee.id == emp_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+        
+    if emp.user and emp.user.role != "EMPLOYEE":
+        raise HTTPException(status_code=400, detail="Only users with the EMPLOYEE role can be deactivated here.")
     
     # Deactivate linked user account
     if emp.user:
