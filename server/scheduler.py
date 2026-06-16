@@ -106,7 +106,7 @@ def flag_project_health():
 
 from server.timesheet_scheduler import timesheet_compliance_check
 def start_scheduler():
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
     db = SessionLocal()
     interval = 24
     try:
@@ -120,6 +120,6 @@ def start_scheduler():
         
     scheduler.add_job(update_employee_statuses, 'interval', hours=interval)
     scheduler.add_job(flag_project_health, 'interval', hours=interval)
-    scheduler.add_job(timesheet_compliance_check, 'cron', hour=8, minute=0) # Run daily at 8am
+    scheduler.add_job(timesheet_compliance_check, 'cron', day_of_week='tue', hour=16, minute=58) # Run Tuesday at 16:58 for testing
     scheduler.start()
     logger.info(f"Scheduler started with {interval} hour interval.")
