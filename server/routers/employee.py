@@ -100,8 +100,13 @@ def my_timesheets(db: Session = Depends(get_db), current_user: models.User = Dep
     for t in timesheets:
         w = str(t.week_start_date)
         if w not in weeks:
-            weeks[w] = {"week_start": w, "total_hrs": 0, "status": "SUBMITTED"}
+            weeks[w] = {"week_start": w, "total_hrs": 0, "status": "SUBMITTED", "entries": []}
         weeks[w]["total_hrs"] += t.hours_logged
+        weeks[w]["entries"].append({
+            "project": t.project.name,
+            "hours": t.hours_logged,
+            "tags": t.activity_tags
+        })
         
     return list(weeks.values())
 

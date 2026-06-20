@@ -108,6 +108,9 @@ def create_allocation(alloc: AllocationCreateReq, db: Session = Depends(get_db),
     if emp.manager_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only allocate your own team members.")
         
+    if alloc.to_date < alloc.from_date:
+        raise HTTPException(status_code=400, detail="To Date cannot be before From Date.")
+        
     overlapping = db.query(models.Allocation).filter(
         models.Allocation.employee_id == alloc.employee_id,
         models.Allocation.from_date <= alloc.to_date,
@@ -313,37 +316,6 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     emp_repo = EmployeeRepository(db)
     employees = emp_repo.get_all()
     
-    candidates = []
-    
-    today = date.today()
-    for emp in employees:
-        current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
-        total_util = sum(a.utilisation_percentage for a in current_allocs)
-        free_capacity = MAX_UTILIZATION_PERCENTAGE - total_util
-        if free_capacity > 0:
-            skills = ", ".join([s.name for s in emp.skills])
-            recent_tags = ", ".join([t.activity_tags for t in emp.timesheets[-4:]]) if emp.timesheets else "None"
-            candidates.append(f"ID {emp.id}: {emp.full_name}. Free capacity: {free_capacity}%. Skills: {skills}. Recent activity: {recent_tags}")
-            
-    if not candidates:
-        return {"results": "No employees have free capacity."}
-        
-    candidates_text = "\n".join(candidates)
-    
-    prompt = f"""
-    The manager needs: "{req.requirement}"
-    
-    Here are the available candidates:
-    {candidates_text}
-    
-    Rank the top matches based on their skills and availability.
-    You MUST output a simple text table with exactly these headers:
-    ID   Name           Skills Match           Availability   Reason
-    
-    For each candidate, output a row matching the format. Under the 'ID' column, you MUST output their exact integer ID from the candidates list. In the 'Reason' column, explicitly state why they are a good fit. Do not add any other text before or after the table.
-    """
-    
-    # Use the Strategy Pattern (OCP & SRP)
     provider_name = get_llm_provider_name(db)
     host_url = get_llm_host_url(db)
     try:
@@ -351,6 +323,53 @@ def ai_skill_match(req: AISearchReq, db: Session = Depends(get_read_only_db), cu
     except ValueError as e:
         return {"results": f"AI Error: {str(e)}"}
         
+    # Step 1: Interpret required capacity
+    capacity_prompt = f"Extract the required utilization percentage (0-100) from this requirement: '{req.requirement}'. If hours are mentioned (e.g. 10 hrs/week), assume 40 hours = 100%. If full-time or no specific time is mentioned, return 0 to consider all candidates. If it says 'at least X%', return X. Return ONLY the integer."
+    try:
+        req_capacity_str = provider.generate_content(capacity_prompt, api_key).strip()
+        import re
+        match = re.search(r'\d+', req_capacity_str)
+        req_capacity = int(match.group()) if match else 0
+    except Exception:
+        req_capacity = 0
+
+    candidates = []
+    
+    today = date.today()
+    for emp in employees:
+        current_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
+        total_util = sum(a.utilisation_percentage for a in current_allocs)
+        free_capacity = MAX_UTILIZATION_PERCENTAGE - total_util
+        
+        # Step 2: Pre-filter out anyone who is fully booked or doesn't have enough capacity
+        if free_capacity >= req_capacity:
+            skills = ", ".join([s.name for s in emp.skills])
+            recent_tags = ", ".join([t.activity_tags for t in emp.timesheets[-4:]]) if emp.timesheets else "None"
+            candidates.append(f"ID {emp.id}: {emp.full_name}. Free capacity: {free_capacity}%. Skills: {skills}. Recent activity: {recent_tags}")
+            
+    if not candidates:
+        return {"results": f"No employees have the required free capacity ({req_capacity}%)."}
+        
+    candidates_text = "\n".join(candidates)
+    
+    # Step 3: Refined prompt to only return good matches
+    alloc_suggestion = f"{req_capacity}%" if req_capacity > 0 else "their full available capacity"
+    prompt = f"""
+    The manager needs: "{req.requirement}"
+    
+    Here are the available candidates with at least {req_capacity}% free capacity:
+    {candidates_text}
+    
+    Select and rank ALL the candidates who are a good skill match for the requirement. 
+    Do NOT include any candidate who does not match the required skills.
+    
+    You MUST output a simple text table with exactly these headers:
+    ID   Name           Skills Match           Availability   Reason
+    
+    For EVERY SINGLE MATCHING candidate, output a row. Under the 'ID' column, use their exact integer ID. In the 'Reason' column, explicitly state why they are a good fit and suggest an allocation level (e.g., '{alloc_suggestion}').
+    Do not output rows for candidates with "No match". Do not add any other text before or after the table.
+    """
+    
     matcher = GenericMatchingStrategy(provider)
     result = matcher.match_skills(prompt, api_key)
     return {"results": result}
@@ -434,10 +453,12 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
         raise HTTPException(status_code=404, detail="Project not found")
         
     milestones = "\n".join([f"- {m.title} (Due: {m.due_date}, Status: {m.status})" for m in proj.milestones])
-    allocations = "\n".join([f"- {a.employee.full_name} ({a.utilisation_percentage}%)" for a in proj.allocations])
+    today = date.today()
+    active_allocs = [a for a in proj.allocations if a.from_date <= today <= a.to_date]
+    allocations = "\n".join([f"- {a.employee.full_name} ({a.utilisation_percentage}%)" for a in active_allocs])
     
     timesheets = db.query(models.Timesheet).filter(models.Timesheet.project_id == project_id).all()
-    timesheet_summary = "\n".join([f"- {t.employee.full_name}: {t.hours_worked} hrs, tags: {t.activity_tags}" for t in timesheets[-10:]])
+    timesheet_summary = "\n".join([f"- {t.employee.full_name}: {t.hours_logged} hrs, tags: {t.activity_tags}" for t in timesheets[-10:]])
     
     prompt = f"""
     Analyze the risk for project '{proj.name}' ending on {proj.end_date}.

@@ -352,6 +352,14 @@ def add_milestone(project_id: int, milestone: schemas.MilestoneCreate, db: Sessi
     proj = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not proj:
         raise HTTPException(status_code=404, detail="Project not found")
+        
+    if milestone.story_points is not None:
+        total_sp = proj.total_story_points or 0
+        assigned_sp = sum([m.story_points for m in proj.milestones if m.story_points])
+        remaining_sp = total_sp - assigned_sp
+        if milestone.story_points > remaining_sp:
+            raise HTTPException(status_code=400, detail="Story points exceed remaining project SP. Please update the total story points in project details.")
+    
     
     new_ms = models.Milestone(project_id=project_id, **milestone.model_dump())
     db.add(new_ms)
@@ -365,6 +373,14 @@ def update_milestone(project_id: int, milestone_id: int, milestone_update: schem
     ms = db.query(models.Milestone).filter(models.Milestone.id == milestone_id, models.Milestone.project_id == project_id).first()
     if not ms:
         raise HTTPException(status_code=404, detail="Milestone not found")
+        
+    if milestone_update.story_points is not None:
+        proj = db.query(models.Project).filter(models.Project.id == project_id).first()
+        total_sp = proj.total_story_points or 0
+        assigned_sp = sum([m.story_points for m in proj.milestones if m.story_points and m.id != milestone_id])
+        remaining_sp = total_sp - assigned_sp
+        if milestone_update.story_points > remaining_sp:
+            raise HTTPException(status_code=400, detail="Story points exceed remaining project SP. Please update the total story points in project details.")
         
     update_data = milestone_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():

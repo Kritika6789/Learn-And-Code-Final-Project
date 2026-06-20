@@ -25,6 +25,10 @@ def timesheet_compliance_check():
         
         employees = db.query(models.Employee).all()
         for emp in employees:
+            if emp.user and not emp.user.is_active:
+                print(f"DEBUG: Skipping deactivated user {emp.full_name}")
+                continue
+                
             active_allocs = [a for a in emp.allocations if a.from_date <= last_week_end and a.to_date >= last_week_start]
             if not active_allocs:
                 print(f"DEBUG: Skipping {emp.full_name} - No active allocations between {last_week_start} and {last_week_end}")

@@ -65,7 +65,7 @@ def print_table(headers, rows, col_widths=None):
             for row in rows:
                 if i < len(row):
                     max_w = max(max_w, len(str(row[i])))
-            col_widths.append(min(max_w + 2, 20))
+            col_widths.append(min(max_w + 2, 50))
 
     header_line = ""
     for i, h in enumerate(headers):

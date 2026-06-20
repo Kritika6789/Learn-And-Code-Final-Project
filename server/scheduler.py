@@ -15,6 +15,9 @@ def update_employee_statuses():
         today = date.today()
         
         for emp in employees:
+            if emp.user and not emp.user.is_active:
+                continue
+                
             active_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
             total_util = sum(a.utilisation_percentage for a in active_allocs)
             
@@ -120,6 +123,6 @@ def start_scheduler():
         
     scheduler.add_job(update_employee_statuses, 'interval', hours=interval)
     scheduler.add_job(flag_project_health, 'interval', hours=interval)
-    scheduler.add_job(timesheet_compliance_check, 'cron', day_of_week='tue', hour=16, minute=58) # Run Tuesday at 16:58 for testing
+    scheduler.add_job(timesheet_compliance_check, 'cron', day_of_week='tue,wed,thu', hour=8, minute=0) # Tue=Rem1, Wed=Rem2, Thu=Freeze
     scheduler.start()
     logger.info(f"Scheduler started with {interval} hour interval.")
