@@ -32,15 +32,21 @@ class TimesheetCreateReq(BaseModel):
 def submit_timesheet(ts: TimesheetCreateReq, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     emp = get_employee_profile(current_user, db)
     
+    if getattr(emp, "timesheet_frozen", False):
+        raise HTTPException(status_code=403, detail="Your timesheet submission access has been frozen. Please contact your manager.")
+    
     if ts.week_start_date.weekday() != 0:
         raise HTTPException(status_code=400, detail="week_start_date must be a Monday")
     if ts.week_start_date > date.today():
         raise HTTPException(status_code=400, detail="Cannot submit timesheet for a future week")
         
+    from datetime import timedelta
+    week_end_date = ts.week_start_date + timedelta(days=6)
+    
     alloc = db.query(models.Allocation).filter(
         models.Allocation.employee_id == emp.id,
         models.Allocation.project_id == ts.project_id,
-        models.Allocation.from_date <= ts.week_start_date,
+        models.Allocation.from_date <= week_end_date,
         models.Allocation.to_date >= ts.week_start_date
     ).first()
     
@@ -50,9 +56,12 @@ def submit_timesheet(ts: TimesheetCreateReq, db: Session = Depends(get_db), curr
     config = db.query(models.SystemConfiguration).filter(models.SystemConfiguration.key == "MAX_WEEKLY_HOURS").first()
     max_weekly_hours = int(config.value) if config else 40
     
+    from server.services.email_service import EmailService
     allowed_hours = (alloc.utilisation_percentage / 100.0) * max_weekly_hours
     if ts.hours_logged > allowed_hours:
-        raise HTTPException(status_code=400, detail=f"Hours logged ({ts.hours_logged}) exceeds expected max for this project ({allowed_hours})")
+        manager_email = emp.manager.email if emp.manager else None
+        if manager_email:
+            EmailService.send_email(manager_email, "Timesheet Over-Utilisation Alert", f"Employee {emp.full_name} has logged {ts.hours_logged} hours for project {alloc.project.name}, which exceeds their expected max of {allowed_hours} hours.")
         
     existing_ts = db.query(models.Timesheet).filter(
         models.Timesheet.employee_id == emp.id,
@@ -61,7 +70,9 @@ def submit_timesheet(ts: TimesheetCreateReq, db: Session = Depends(get_db), curr
     
     total_logged = sum(t.hours_logged for t in existing_ts)
     if total_logged + ts.hours_logged > max_weekly_hours:
-        raise HTTPException(status_code=400, detail=f"Total hours for the week would exceed system maximum ({max_weekly_hours})")
+        manager_email = emp.manager.email if emp.manager else None
+        if manager_email:
+            EmailService.send_email(manager_email, "Global Hours Exceeded Alert", f"Employee {emp.full_name} has logged a total of {total_logged + ts.hours_logged} hours this week, which exceeds the system maximum of {max_weekly_hours} hours.")
         
     for t in existing_ts:
         if t.project_id == ts.project_id:
@@ -99,6 +110,7 @@ def my_allocations(db: Session = Depends(get_db), current_user: models.User = De
     emp = get_employee_profile(current_user, db)
     allocs = db.query(models.Allocation).filter(models.Allocation.employee_id == emp.id).all()
     return [{
+        "project_id": a.project_id,
         "project": a.project.name,
         "percentage": a.utilisation_percentage,
         "from": a.from_date,

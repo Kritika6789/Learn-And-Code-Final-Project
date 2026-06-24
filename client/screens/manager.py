@@ -53,13 +53,16 @@ def resource_dashboard():
         print(f"\nACTIVE EMPLOYEES")
         ui.print_separator()
         if active:
-            headers = ["ID", "Name", "Alloc %", "Availability"]
+            headers = ["ID", "Name", "Alloc %", "Availability", "Skills"]
             rows = []
             for e in active:
                 util = e["current_utilisation"]
                 avail = "FULL" if util >= 100 else f"{100 - util}% free"
-                rows.append([e["id"], e["name"], f"{util}%", avail])
-            ui.print_table(headers, rows, [6, 18, 10, 14])
+                if e.get("timesheet_frozen"):
+                    avail += " [FROZEN]"
+                skills = ", ".join(e.get("skills", []))
+                rows.append([e["id"], e["name"], f"{util}%", avail, skills])
+            ui.print_table(headers, rows, [6, 15, 10, 20, 25])
         else:
             print("(No active employees)")
 
@@ -67,9 +70,19 @@ def resource_dashboard():
         partial = sum(1 for e in active if 0 < e["current_utilisation"] < 100)
         print(f"\nBench: {len(bench)}   |   Over-utilised: {over}   |   Partial: {partial}")
 
-        print("\n[D] Drill into employee details     [B] Back")
+        print("\n[D] Drill into employee details    [U] Unfreeze employee    [B] Back")
         choice = ui.get_input("> ").upper()
-        if choice == "D":
+        if choice == "U":
+            emp_id = ui.get_input("Enter Employee ID to unfreeze: ")
+            if emp_id:
+                try:
+                    api.unfreeze_employee(emp_id)
+                    ui.print_success("Employee unfrozen successfully.")
+                    ui.get_input("Press Enter to continue...")
+                except api.APIError as e:
+                    ui.print_error(e.message)
+                    ui.get_input("Press Enter to continue...")
+        elif choice == "D":
             emp_id = ui.get_input("Enter Employee ID: ")
             if emp_id:
                 try:
@@ -111,7 +124,8 @@ def allocate_resource():
         ui.clear_screen()
         ui.print_header("ALLOCATE RESOURCE")
         choice = ui.get_menu_choice([
-            "Find resource using AI (recommended)",
+            "Find resource using AI (Single Role)",
+            "Staff whole team using AI (Multiple Roles)",
             "Allocate directly (I already know who I want)",
             "End an existing allocation",
             "Back"
@@ -120,10 +134,12 @@ def allocate_resource():
         if choice == "1":
             ai_allocate()
         elif choice == "2":
-            direct_allocate()
+            ai_team_allocate()
         elif choice == "3":
-            end_allocation()
+            direct_allocate()
         elif choice == "4":
+            end_allocation()
+        elif choice == "5":
             return
 
 def ai_allocate():
@@ -137,11 +153,12 @@ def ai_allocate():
             ui.print_error("You have no projects assigned.")
             ui.get_input("Press Enter to continue...")
             return
-        for p in projects:
-            print(f"  {p['id']}. {p['name']}")
-        project_id = ui.get_input("\nEnter project ID: ")
-        if not project_id:
+        for i, p in enumerate(projects, 1):
+            print(f"  {i}. {p['name']}")
+        sel = ui.get_input("\nEnter project number: ")
+        if not sel or not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
             return
+        project_id = projects[int(sel)-1]['id']
 
         print("\nStep 2 — Describe your requirement")
         print("Type what kind of resource you need:")
@@ -158,12 +175,48 @@ def ai_allocate():
         print("\nNote: Suggestions are AI-generated. Verify before confirming.")
         ui.print_separator()
 
-        emp_id = ui.get_input("\nSelect employee (enter ID, or 0 to search again): ")
-        if emp_id and emp_id != "0":
-            proj = next((p for p in projects if str(p['id']) == str(project_id)), None)
-            project_name = proj['name'] if proj else f"Project {project_id}"
-            perform_allocation(project_id, project_name, emp_id)
+        print("\n[A] Go to Direct Allocate     [B] Back")
+        choice = ui.get_input("> ").upper()
+        if choice == "A":
+            direct_allocate()
+        return
+    except api.APIError as e:
+        ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
+
+def ai_team_allocate():
+    ui.clear_screen()
+    ui.print_header("STAFF WHOLE TEAM")
+
+    print("Step 1 — Select Project")
+    try:
+        projects = api.get_my_projects()
+        if not projects:
+            ui.print_error("You have no projects assigned.")
+            ui.get_input("Press Enter to continue...")
+            return
+        for i, p in enumerate(projects, 1):
+            print(f"  {i}. {p['name']}")
+        sel = ui.get_input("\nEnter project number: ")
+        if not sel or not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
+            return
+        project_id = projects[int(sel)-1]['id']
+
+        print("\nStep 2 — Define Your Team Requirement")
+        print("Describe your entire team requirement at once (e.g., '1 frontend developer, 2 backend developers, and a devops engineer'):")
+        requirement = ui.get_input("> ")
+            
+        if not requirement:
+            return
+            
+        print("\nSearching global pool... (AI matching in progress, please wait)")
+        result = api.ai_team_search(int(project_id), requirement)
+        ui.print_separator()
+        print("TEAM STAFFING RESULTS")
+        ui.print_separator()
+        print(result.get("results", "No results."))
+        print("\nNote: You cannot allocate directly from this screen.")
+        ui.get_input("Press Enter to go back...")
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
@@ -177,10 +230,28 @@ def direct_allocate():
             ui.print_error("You have no projects assigned.")
             ui.get_input("Press Enter to continue...")
             return
-        for p in projects:
-            print(f"  {p['id']}. {p['name']}")
-        project_id = ui.get_input("\nSelect Project ID : ")
-        emp_id = ui.get_input("Enter Employee ID : ")
+            
+        dashboard = api.handle_response(
+            __import__('requests').get(f"{api.BASE_URL}/manager/dashboard", headers=api.get_headers())
+        )
+        my_team = dashboard.get("bench", []) + dashboard.get("active", [])
+        if not my_team:
+            ui.print_error("You do not have any team members.")
+            ui.get_input("Press Enter to continue...")
+            return
+            
+        for i, p in enumerate(projects, 1):
+            print(f"  {i}. {p['name']}")
+        sel = ui.get_input("\nSelect Project Number : ")
+        if not sel or not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
+            return
+        project_id = projects[int(sel)-1]['id']
+        
+        print("\nYour Team Members:")
+        for emp in my_team:
+            print(f"  ID {emp['id']}: {emp['name']}")
+            
+        emp_id = ui.get_input("\nEnter Employee ID : ")
 
         if project_id and emp_id:
             proj = next((p for p in projects if str(p['id']) == str(project_id)), None)
@@ -219,8 +290,13 @@ def perform_allocation(project_id, project_name, emp_id):
         return
 
     util_val = int(util.replace("%", "").strip())
+    total = current_util + util_val
     print("\nValidating...")
-    print(f"  {emp_name} total in this period: {current_util}% + {util_val}% = {current_util + util_val}%   ✓ Valid")
+    if total > 100:
+        print(f"  {emp_name} total in this period: {current_util}% + {util_val}% = {total}%   ✗ OVER-ALLOCATED")
+        print("  Warning: Backend will reject allocations exceeding 100%.")
+    else:
+        print(f"  {emp_name} total in this period: {current_util}% + {util_val}% = {total}%   ✓ Valid")
     print(f"\n[C] Confirm Allocation     [B] Back")
     choice = ui.get_input("> ").upper()
     if choice == "C":
@@ -245,11 +321,12 @@ def end_allocation():
             ui.print_error("You have no projects.")
             ui.get_input("Press Enter to continue...")
             return
-        for p in projects:
-            print(f"  {p['id']}. {p['name']}")
-        project_id = ui.get_input("\nSelect Project ID: ")
-        if not project_id:
+        for i, p in enumerate(projects, 1):
+            print(f"  {i}. {p['name']}")
+        sel = ui.get_input("\nSelect Project Number: ")
+        if not sel or not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
             return
+        project_id = projects[int(sel)-1]['id']
 
         details = api.get_project_details(int(project_id))
         proj_name = details.get("name", f"Project {project_id}")
@@ -430,11 +507,12 @@ def skill_match():
             ui.print_error("No projects found.")
             ui.get_input("Press Enter to continue...")
             return
-        for p in projects:
-            print(f"  {p['id']}. {p['name']}")
-        project_id = ui.get_input("\nSelect project ID: ")
-        if not project_id:
+        for i, p in enumerate(projects, 1):
+            print(f"  {i}. {p['name']}")
+        sel = ui.get_input("\nSelect project number: ")
+        if not sel or not sel.isdigit() or not (1 <= int(sel) <= len(projects)):
             return
+        project_id = projects[int(sel)-1]['id']
 
         print("\nDescribe your project requirement in plain English:")
         req = ui.get_input("> ")

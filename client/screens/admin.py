@@ -12,6 +12,7 @@ def admin_menu(user):
             "View All Allocations",
             "Manage Users",
             "System Configuration",
+            "Demo Tools",
             "Logout"
         ])
 
@@ -26,11 +27,39 @@ def admin_menu(user):
         elif choice == "5":
             system_config()
         elif choice == "6":
+            demo_tools()
+        elif choice == "7":
             api.TOKEN = None
             return
         else:
             ui.print_error("Invalid option")
             ui.get_input("Press Enter to continue...")
+
+# ==================== DEMO TOOLS ====================
+def demo_tools():
+    while True:
+        ui.clear_screen()
+        ui.print_header("DEMO TOOLS")
+        print("Use these tools to manually trigger background jobs for live demos.")
+        print()
+        
+        choice = ui.get_menu_choice([
+            "Trigger Timesheet Compliance Check (Advance 1 Step)",
+            "Back"
+        ])
+
+        if choice == "1":
+            print("\nAdvancing Timesheet Scheduler State Machine...")
+            try:
+                res = api.trigger_demo_compliance(0) # Passing dummy index, API ignores it now
+                ui.print_success(res["message"])
+                print("\nCheck the backend server console to see the mock email logs!")
+            except api.APIError as e:
+                ui.print_error(e.message)
+            ui.get_input("Press Enter to continue...")
+        elif choice == "4":
+            return
+
 
 # ==================== MANAGE EMPLOYEES ====================
 def manage_employees():
@@ -853,6 +882,7 @@ def system_config():
             llm_key = config.get("LLM_API_KEY", "")
             masked_key = "****************************" if llm_key else "(not set)"
             print(f"  LLM Provider        :  {config.get('LLM_PROVIDER', 'N/A')}")
+            print(f"  LLM Host URL        :  {config.get('LLM_HOST', 'N/A')}")
             print(f"  LLM API Key         :  {masked_key}")
             print(f"  Scheduler Interval  :  {config.get('SCHEDULER_INTERVAL_HOURS', 'N/A')} hours")
             print(f"  Max Weekly Hours    :  {config.get('MAX_WEEKLY_HOURS', 'N/A')}")
@@ -860,7 +890,8 @@ def system_config():
 
             choice = ui.get_menu_choice([
                 "Update LLM API Key",
-                "Change LLM Provider  (Gemini / Groq)",
+                "Change LLM Provider  (Gemini / Groq / Gemma)",
+                "Update LLM Host URL (for self-hosted)",
                 "Update Scheduler Interval",
                 "Update Max Weekly Hours",
                 "Back"
@@ -875,7 +906,7 @@ def system_config():
                     ui.print_success("API Key updated.")
                     ui.get_input("Press Enter to continue...")
             elif choice == "2":
-                provider = ui.get_input("Enter provider (Google Gemini / Groq): ")
+                provider = ui.get_input("Enter provider (Google Gemini / Groq / Gemma): ")
                 if provider:
                     api.handle_response(
                         __import__('requests').put(f"{api.BASE_URL}/admin/config/LLM_PROVIDER", params={"value": provider}, headers=api.get_headers())
@@ -883,6 +914,14 @@ def system_config():
                     ui.print_success("Provider updated.")
                     ui.get_input("Press Enter to continue...")
             elif choice == "3":
+                host_url = ui.get_input("Enter LLM Host URL (e.g. http://<IP>/api/generate): ")
+                if host_url:
+                    api.handle_response(
+                        __import__('requests').put(f"{api.BASE_URL}/admin/config/LLM_HOST", params={"value": host_url}, headers=api.get_headers())
+                    )
+                    ui.print_success("Host URL updated.")
+                    ui.get_input("Press Enter to continue...")
+            elif choice == "4":
                 hrs = ui.get_input("Enter new interval (hours): ")
                 if hrs:
                     api.handle_response(
@@ -890,7 +929,7 @@ def system_config():
                     )
                     ui.print_success("Scheduler interval updated.")
                     ui.get_input("Press Enter to continue...")
-            elif choice == "4":
+            elif choice == "5":
                 max_hrs = ui.get_input("Enter max weekly hours: ")
                 if max_hrs:
                     api.handle_response(
@@ -898,7 +937,7 @@ def system_config():
                     )
                     ui.print_success("Max weekly hours updated.")
                     ui.get_input("Press Enter to continue...")
-            elif choice == "5":
+            elif choice == "6":
                 return
         except api.APIError as e:
             ui.print_error(e.message)

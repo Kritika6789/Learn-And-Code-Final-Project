@@ -10,6 +10,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
+    department = Column(String, nullable=True)
+    designation = Column(String, nullable=True)
     role = Column(String, nullable=False) # ADMIN, MANAGER, EMPLOYEE
     is_active = Column(Boolean, default=True)
     force_password_change = Column(Boolean, default=True)
@@ -19,16 +21,30 @@ class User(Base):
     team_members = relationship("Employee", back_populates="manager", foreign_keys="Employee.manager_id")
 
 class Employee(Base):
-    __tablename__ = "employees"
+    __tablename__ = "resource"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=True)
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # New column for team scoping
-    full_name = Column(String, nullable=False)
-    email = Column(String, nullable=False)
-    department = Column(String, nullable=False)
-    designation = Column(String, nullable=False)
     status = Column(String, default="BENCH") # BENCH, ALLOCATED, PARTIAL
+    timesheet_frozen = Column(Boolean, default=False)
+    missing_timesheet_reminders = Column(Integer, default=0)
+
+    @property
+    def full_name(self):
+        return self.user.full_name if self.user else "Unknown"
+
+    @property
+    def email(self):
+        return self.user.email if self.user else "Unknown"
+
+    @property
+    def department(self):
+        return self.user.department if self.user else "Unassigned"
+
+    @property
+    def designation(self):
+        return self.user.designation if self.user else "Unassigned"
 
     user = relationship("User", back_populates="employee", foreign_keys="Employee.user_id")
     manager = relationship("User", back_populates="team_members", foreign_keys=[manager_id])
@@ -40,7 +56,7 @@ class Skill(Base):
     __tablename__ = "skills"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column("resource_id", Integer, ForeignKey("resource.id"), nullable=False)
     name = Column(String, nullable=False)
     category = Column(String, nullable=False)
     proficiency_level = Column(String, nullable=False)
@@ -58,6 +74,7 @@ class Project(Base):
     status = Column(String, nullable=False, default="PLANNED") # PLANNED, ACTIVE, ON_HOLD
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     total_story_points = Column(Integer, default=0)
+    at_risk_notified = Column(Boolean, default=False)
 
     manager = relationship("User", back_populates="managed_projects")
     milestones = relationship("Milestone", back_populates="project")
@@ -80,7 +97,7 @@ class Allocation(Base):
     __tablename__ = "allocations"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column("resource_id", Integer, ForeignKey("resource.id"), nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     utilisation_percentage = Column(Integer, nullable=False)
     from_date = Column(Date, nullable=False)
@@ -93,7 +110,7 @@ class Timesheet(Base):
     __tablename__ = "timesheets"
 
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    employee_id = Column("resource_id", Integer, ForeignKey("resource.id"), nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     week_start_date = Column(Date, nullable=False)
     hours_logged = Column(Integer, nullable=False)

@@ -1,0 +1,122 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam usecase {
+    BackgroundColor LightCyan
+    BorderColor DarkSlateGray
+    ArrowColor DimGray
+}
+skinparam actor {
+    BackgroundColor Application
+    BorderColor DarkSlateGray
+}
+skinparam rectangle {
+    BackgroundColor White
+    BorderColor DarkSlateGray
+}
+
+' =========================================
+' ACTORS
+' =========================================
+actor "🧑‍💼 Admin" as admin
+actor "👨‍💻 Manager" as manager
+actor "👷 Employee" as employee
+actor "⚙️ Background Scheduler" as scheduler
+
+' =========================================
+' EXTERNAL SYSTEMS
+' =========================================
+rectangle "☁️ LLM Service (Google Gemini)" as llm {
+  usecase "Process Natural Language Queries\n(Skill Match)" as ai_skill
+  usecase "Generate Plain-English Risk Summaries" as ai_risk
+}
+
+' =========================================
+' SYSTEM BOUNDARY
+' =========================================
+rectangle "Project & Resource Management System (BRD V4)" {
+  
+  package "ADMIN USE CASES (System Operator)" {
+    usecase "Login / Change Password" as a_login
+    usecase "Create User Accounts\n(Admin, Manager, Employee)" as a_create_usr
+    usecase "Manage User Accounts\n(Reset Passwords, Deactivate)" as a_manage_usr
+    
+    usecase "Manage Employee Profiles\n(Add, Update, Deactivate)" as a_manage_emp
+    usecase "Assign & Manage Skills" as a_manage_skills
+    
+    usecase "Manage Projects & Milestones\n(Create, Update)" as a_manage_proj
+    usecase "View Company-Wide Allocations" as a_view_alloc
+    usecase "Configure System Settings\n(LLM API Key, Max Weekly Hours)" as a_sys_config
+  }
+
+  package "MANAGER USE CASES (Delivery Manager)" {
+    usecase "Login / Change Password" as m_login
+    usecase "Resource Dashboard\n(Scope: Direct Team Only)" as m_dash
+    usecase "Search Resources via AI\n(Natural Language Query)" as m_ai_search
+    usecase "Allocate Employees to Projects" as m_allocate
+    
+    usecase "Monitor Project Health" as m_monitor_proj
+    usecase "View Team Timesheets\n(Includes Missed Flags)" as m_view_ts
+  }
+
+  package "EMPLOYEE USE CASES (Individual Contributor)" {
+    usecase "Login / Change Password" as e_login
+    usecase "Submit Weekly Timesheet" as e_submit_ts
+    usecase "Log Hours per Project" as e_log_hrs
+    usecase "Tag Work Done (Activity Tags)" as e_log_tags
+    usecase "View Personal Allocation History" as e_view_alloc
+    usecase "View Personal Timesheet History" as e_view_ts
+  }
+
+  package "AUTOMATED JOBS (Background Scheduler)" {
+    usecase "Compute Utilisation / Update Bench Status" as s_util
+    usecase "Flag Project Health & Risks" as s_risk
+  }
+}
+
+' =========================================
+' RELATIONSHIPS (Admin)
+' =========================================
+admin --> a_login
+admin --> a_create_usr
+admin --> a_manage_usr
+admin --> a_manage_emp
+admin --> a_manage_skills
+admin --> a_manage_proj
+admin --> a_view_alloc
+admin --> a_sys_config
+
+' =========================================
+' RELATIONSHIPS (Manager)
+' =========================================
+manager --> m_login
+manager --> m_dash
+manager --> m_ai_search
+m_ai_search .> m_allocate : <<extend>>
+manager --> m_allocate
+manager --> m_monitor_proj
+manager --> m_view_ts
+
+' =========================================
+' RELATIONSHIPS (Employee)
+' =========================================
+employee --> e_login
+employee --> e_submit_ts
+e_submit_ts .> e_log_hrs : <<include>>
+e_submit_ts .> e_log_tags : <<include>>
+employee --> e_view_alloc
+employee --> e_view_ts
+
+' =========================================
+' RELATIONSHIPS (Scheduler)
+' =========================================
+scheduler --> s_util
+scheduler --> s_risk
+
+' =========================================
+' RELATIONSHIPS (External LLM)
+' =========================================
+m_ai_search .> ai_skill : <<include>>
+m_monitor_proj .> ai_risk : <<extend>>
+
+@enduml
