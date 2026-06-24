@@ -460,6 +460,9 @@ def ai_risk_summary(project_id: int, db: Session = Depends(get_read_only_db), cu
     timesheets = db.query(models.Timesheet).filter(models.Timesheet.project_id == project_id).all()
     timesheet_summary = "\n".join([f"- {t.employee.full_name}: {t.hours_logged} hrs, tags: {t.activity_tags}" for t in timesheets[-10:]])
     
+    timesheets = db.query(models.Timesheet).filter(models.Timesheet.project_id == project_id).all()
+    timesheet_summary = "\n".join([f"- {t.employee.full_name}: {t.hours_worked} hrs, tags: {t.activity_tags}" for t in timesheets[-10:]])
+    
     prompt = f"""
     Analyze the risk for project '{proj.name}' ending on {proj.end_date}.
     

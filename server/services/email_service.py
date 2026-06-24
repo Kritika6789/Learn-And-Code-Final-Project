@@ -47,8 +47,6 @@ class EmailService:
     @staticmethod
     def _send_mock_email(to_email: str, subject: str, body: str):
         email_content = f"""
-==================================================
-EMAIL NOTIFICATION (MOCK)
 --------------------------------------------------
 To:      {to_email}
 Subject: {subject}
