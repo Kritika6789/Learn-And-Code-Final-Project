@@ -5,8 +5,9 @@ from server.scheduler import update_employee_statuses, flag_project_health
 from server import models
 from tests.conftest import TestingSessionLocal
 
-@patch("server.scheduler.SessionLocal", new=TestingSessionLocal)
-def test_update_employee_statuses(db):
+@patch("server.scheduler.SessionLocal")
+def test_update_employee_statuses(mock_session_local, db):
+    mock_session_local.return_value = db
     # Get employee (currently BENCH)
     emp = db.query(models.Employee).filter(models.Employee.id == 1).first()
     assert emp.status == "BENCH"
@@ -51,8 +52,9 @@ def test_update_employee_statuses(db):
     db.refresh(emp)
     assert emp.status == "BENCH"
 
-@patch("server.scheduler.SessionLocal", new=TestingSessionLocal)
-def test_flag_project_health_auto_activate(db):
+@patch("server.scheduler.SessionLocal")
+def test_flag_project_health_auto_activate(mock_session_local, db):
+    mock_session_local.return_value = db
     # Create a PLANNED project with start date = today
     project = models.Project(
         name="Activation Test Project",
