@@ -384,7 +384,7 @@ def my_projects():
 
         headers = ["#", "Project", "End Date", "Health"]
         rows = [[i+1, p["name"], p["end_date"], p.get("health", p["status"])] for i, p in enumerate(projects)]
-        ui.print_table(headers, rows, [5, 18, 12, 16])
+        ui.print_table(headers, rows, [5, 40, 12, 16])
 
         sel = ui.get_input("\nSelect project number to view details (or B to go back): ")
         if sel and sel.isdigit() and 1 <= int(sel) <= len(projects):
@@ -413,7 +413,7 @@ def show_project_detail(project_id):
         if details.get("milestones"):
             headers = ["#", "Title", "Due Date", "Status"]
             rows = [[i+1, m["title"], m["due_date"], m["status"]] for i, m in enumerate(details["milestones"])]
-            ui.print_table(headers, rows, [5, 20, 12, 16])
+            ui.print_table(headers, rows, [5, 40, 12, 16])
         else:
             print("  (No milestones)")
 

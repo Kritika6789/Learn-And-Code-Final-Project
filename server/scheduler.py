@@ -15,6 +15,9 @@ def update_employee_statuses():
         today = date.today()
         
         for emp in employees:
+            if emp.user and not emp.user.is_active:
+                continue
+                
             active_allocs = [a for a in emp.allocations if a.from_date <= today <= a.to_date]
             total_util = sum(a.utilisation_percentage for a in active_allocs)
             
@@ -106,7 +109,7 @@ def flag_project_health():
 
 from server.timesheet_scheduler import timesheet_compliance_check
 def start_scheduler():
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
     db = SessionLocal()
     interval = 24
     try:
@@ -120,6 +123,6 @@ def start_scheduler():
         
     scheduler.add_job(update_employee_statuses, 'interval', hours=interval)
     scheduler.add_job(flag_project_health, 'interval', hours=interval)
-    scheduler.add_job(timesheet_compliance_check, 'cron', hour=8, minute=0) # Run daily at 8am
+    scheduler.add_job(timesheet_compliance_check, 'cron', day_of_week='tue,wed,thu', hour=8, minute=0) # Tue=Rem1, Wed=Rem2, Thu=Freeze
     scheduler.start()
     logger.info(f"Scheduler started with {interval} hour interval.")

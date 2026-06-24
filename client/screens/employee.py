@@ -174,8 +174,43 @@ def view_my_timesheets():
             rows = [[t["week_start"], f"{t['total_hrs']} hrs", t["status"]] for t in timesheets]
             ui.print_table(headers, rows, [16, 12, 12])
 
-        print("\n[V] View week details     [B] Back")
-        ui.get_input("> ")
+        while True:
+            print("\n[V] View week details     [B] Back")
+            choice = ui.get_input("> ").upper()
+            
+            if choice == "B":
+                break
+            elif choice == "V":
+                week_date = ui.get_input("Enter Week Start Date (YYYY-MM-DD): ")
+                week_data = next((t for t in timesheets if t["week_start"] == week_date), None)
+                
+                if not week_data:
+                    ui.print_error("No timesheet found for that week.")
+                else:
+                    ui.clear_screen()
+                    ui.print_header(f"WEEK DETAILS — {week_date}")
+                    print(f"Total Hours: {week_data['total_hrs']} hrs")
+                    print(f"Status     : {week_data['status']}")
+                    ui.print_separator()
+                    
+                    entries = week_data.get("entries", [])
+                    if not entries:
+                        print("No detailed entries available.")
+                    else:
+                        for idx, entry in enumerate(entries, 1):
+                            print(f"\nEntry {idx}:")
+                            print(f"  Project : {entry['project']}")
+                            print(f"  Hours   : {entry['hours']}")
+                            print(f"  Tags    : {entry['tags']}")
+                    
+                    ui.get_input("\nPress Enter to go back to the list...")
+                    # Re-print the list
+                    ui.clear_screen()
+                    ui.print_header("MY TIMESHEETS")
+                    ui.print_table(headers, rows, [16, 12, 12])
+            else:
+                ui.print_error("Invalid choice.")
+
     except api.APIError as e:
         ui.print_error(e.message)
         ui.get_input("Press Enter to continue...")
